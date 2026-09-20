@@ -533,15 +533,16 @@ function toggleLinkGroup(gid){
 
 function copyLink(id, url){
   const btn = document.getElementById(id);
+  const text = 'Cio Bela! ' + url;
   const done = () => {
     btn.textContent = 'Copied';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
   };
   if (navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
   } else {
-    fallbackCopy(url, done);
+    fallbackCopy(text, done);
   }
 }
 function fallbackCopy(url, done){
