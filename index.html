@@ -371,6 +371,18 @@ function artistLinks(name, slug){
 }
 
 const TABS = {
+  artists: {
+    label: 'Artists',
+    filter: e => e.utm_source === 'facebook_groups',
+    grouped: true,
+    links: [
+      ...artistLinks('Mia','mia'),
+      ...artistLinks('Londyn','londyn'),
+      ...artistLinks('Zoe','zoe'),
+      ...artistLinks('Savannah','savannah'),
+      ...artistLinks('Shawntavia','shawntavia')
+    ]
+  },
   qr: {
     label: 'QR Screens',
     filter: e => e.utm_source === 'qr_screens',
@@ -397,18 +409,6 @@ const TABS = {
     grouped: true,
     links: []
   },
-  artists: {
-    label: 'Artists',
-    filter: e => e.utm_source === 'facebook_groups',
-    grouped: true,
-    links: [
-      ...artistLinks('Mia','mia'),
-      ...artistLinks('Londyn','londyn'),
-      ...artistLinks('Zoe','zoe'),
-      ...artistLinks('Savannah','savannah'),
-      ...artistLinks('Shawntavia','shawntavia')
-    ]
-  },
   campaigns: {
     label: 'Campaigns',
     isCampaignsHub: true,
@@ -425,7 +425,7 @@ const TABS = {
 };
 
 let allEntries = [];
-let activeTab = 'qr';
+let activeTab = 'artists';
 let activeSubtab = 'rose';
 let activeRunIndex = 0;
 let campaignNav = {level: 'list', campaignKey: null, runIndex: null};
