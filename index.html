@@ -504,7 +504,7 @@ function buildLinkLibFor(cfg){
         html += '<div class="link-row"><div class="link-info">';
         html += '<div class="link-name">' + escapeHtml(l.label) + '</div>';
         html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
-        html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
+        html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\',true)">Copy</button>';
         html += '</div>';
       });
       html += '</div></div>';
@@ -515,7 +515,7 @@ function buildLinkLibFor(cfg){
       html += '<div class="link-row"><div class="link-info">';
       html += '<div class="link-name">' + escapeHtml(l.label) + '</div>';
       html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
-      html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
+      html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\',false)">Copy</button>';
       html += '</div>';
     });
   }
@@ -531,9 +531,9 @@ function toggleLinkGroup(gid){
   chev.classList.toggle('open');
 }
 
-function copyLink(id, url){
+function copyLink(id, url, withBrandPrefix){
   const btn = document.getElementById(id);
-  const text = 'Cio Bela! ' + url;
+  const text = withBrandPrefix ? ('Cio Bela! ' + url) : url;
   const done = () => {
     btn.textContent = 'Copied';
     btn.classList.add('copied');
