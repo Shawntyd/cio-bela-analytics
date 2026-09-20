@@ -411,17 +411,16 @@ const TABS = {
   },
   campaigns: {
     label: 'Campaigns',
-    hasSubtabs: true,
-    subtabs: {
-      rose: {
-        label: 'Rose Campaigns',
+    isCampaignsHub: true,
+    campaignsList: [
+      {
+        key: 'rose',
+        label: 'Rose Campaign',
         filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
-        dateGrouped: true,
         links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
       }
-      // Reruns need no new tags — visits automatically split into separate
-      // dated tabs below based on date gaps in the data (see clusterSessionsByDate).
-    }
+      // Future campaigns get added here as new entries in this list.
+    ]
   }
 };
 
@@ -429,6 +428,7 @@ let allEntries = [];
 let activeTab = 'qr';
 let activeSubtab = 'rose';
 let activeRunIndex = 0;
+let campaignNav = {level: 'list', campaignKey: null, runIndex: null};
 
 function buildTabbar(){
   const bar = document.getElementById('tabbar');
@@ -437,7 +437,12 @@ function buildTabbar(){
     const btn = document.createElement('button');
     btn.className = 'tab-btn' + (key === activeTab ? ' active' : '');
     btn.textContent = TABS[key].label;
-    btn.onclick = () => { activeTab = key; activeRunIndex = 0; renderAll(); };
+    btn.onclick = () => {
+      activeTab = key;
+      activeRunIndex = 0;
+      campaignNav = {level: 'list', campaignKey: null, runIndex: null};
+      renderAll();
+    };
     bar.appendChild(btn);
   });
 }
@@ -464,7 +469,10 @@ function currentConfig(){
 }
 
 function buildLinkLib(){
-  const cfg = currentConfig();
+  buildLinkLibFor(currentConfig());
+}
+
+function buildLinkLibFor(cfg){
   const wrap = document.getElementById('linkLib');
   if (!cfg.links || cfg.links.length === 0){
     wrap.innerHTML = '<div class="link-lib"><div class="link-lib-title">Links</div><div class="empty-note">No links added yet — tell me who to add and I\'ll drop them in here.</div></div>';
@@ -568,7 +576,7 @@ async function loadData(){
     );
 
     allEntries = entries;
-    renderData();
+    if (TABS[activeTab].isCampaignsHub) { renderCampaignsHub(); } else { renderData(); }
     document.getElementById('lastUpdated').textContent = 'Last checked: ' + new Date().toLocaleString();
   } catch(e) {
     content.innerHTML = '<div class="error">Couldn\'t load the data right now: ' + e.message + '. Try again in a moment.</div>';
@@ -777,6 +785,16 @@ function escapeHtml(str){
 
 function renderAll(){
   buildTabbar();
+
+  if (TABS[activeTab].isCampaignsHub){
+    document.getElementById('subtabbar').style.display = 'none';
+    document.getElementById('subtabbar').innerHTML = '';
+    document.getElementById('runtabbar').style.display = 'none';
+    document.getElementById('runtabbar').innerHTML = '';
+    renderCampaignsHub();
+    return;
+  }
+
   buildSubtabbar();
   buildLinkLib();
   if (allEntries.length > 0){
@@ -784,6 +802,99 @@ function renderAll(){
   } else {
     document.getElementById('content').innerHTML = '<div class="loading">Tap "Track Now" to load the latest data.</div>';
   }
+}
+
+function renderCampaignsHub(){
+  const content = document.getElementById('content');
+  const linkWrap = document.getElementById('linkLib');
+
+  // Level 1: list of campaigns
+  if (campaignNav.level === 'list'){
+    linkWrap.innerHTML = '';
+    let html = '<div class="link-lib"><div class="link-lib-title">Campaigns</div>';
+    TABS.campaigns.campaignsList.forEach(camp => {
+      html += '<div class="link-group-header" style="border:1px solid rgba(184,147,90,.3);border-radius:10px;margin-bottom:8px;" onclick="openCampaign(\'' + camp.key + '\')">';
+      html += '<div class="link-group-name">' + escapeHtml(camp.label) + '</div>';
+      html += '<div class="link-group-chevron" style="transform:rotate(-90deg);">&#9662;</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    linkWrap.innerHTML = html;
+    content.innerHTML = allEntries.length > 0
+      ? '<div class="empty">Tap a campaign above to see its dates.</div>'
+      : '<div class="loading">Tap "Track Now" to load data, then pick a campaign above.</div>';
+    return;
+  }
+
+  const camp = TABS.campaigns.campaignsList.find(c => c.key === campaignNav.campaignKey);
+  buildLinkLibFor(camp);
+
+  const filtered = allEntries.filter(camp.filter);
+  const sessions = buildSessions(filtered);
+  const runs = clusterSessionsByDate(sessions);
+
+  // Level 2: list of dates for this campaign
+  if (campaignNav.level === 'campaign'){
+    let html = '<button class="copy-btn" onclick="backToCampaignsList()">&larr; Campaigns</button>';
+    if (allEntries.length === 0){
+      html += '<div class="empty" style="margin-top:16px;">Tap "Track Now" above to load dates for this campaign.</div>';
+      content.innerHTML = html;
+      return;
+    }
+    if (runs.length === 0){
+      html += '<div class="empty" style="margin-top:16px;">No visits logged for ' + escapeHtml(camp.label) + ' yet.</div>';
+      content.innerHTML = html;
+      return;
+    }
+    html += '<div class="section-title">' + escapeHtml(camp.label) + ' — Choose a Date</div>';
+    runs.forEach((run, ri) => {
+      html += '<div class="link-group-header" style="border:1px solid rgba(184,147,90,.3);border-radius:10px;margin-bottom:8px;" onclick="openCampaignRun(' + ri + ')">';
+      html += '<div><div class="link-group-name">' + escapeHtml(run.label) + '</div>';
+      html += '<div class="link-group-count">' + run.sessions.length + ' visitor' + (run.sessions.length===1?'':'s') + '</div></div>';
+      html += '<div class="link-group-chevron" style="transform:rotate(-90deg);">&#9662;</div>';
+      html += '</div>';
+    });
+    content.innerHTML = html;
+    return;
+  }
+
+  // Level 3: a specific date's data
+  if (campaignNav.level === 'date'){
+    const run = runs[campaignNav.runIndex];
+    let html = '<button class="copy-btn" onclick="backToCampaignDates()">&larr; ' + escapeHtml(camp.label) + '</button>';
+    if (!run){
+      html += '<div class="empty" style="margin-top:16px;">No data for this date.</div>';
+      content.innerHTML = html;
+      return;
+    }
+    const runViews = run.sessions.reduce((n, s) => n + s.pageCount, 0);
+    html += '<div class="stat-grid" style="margin-top:16px;">';
+    html += statCard(run.sessions.length, 'Visitors');
+    html += statCard(runViews, 'Total Page Views');
+    html += '</div>';
+    html += '<div class="section-title">' + escapeHtml(run.label) + ' — Visitor Paths (' + run.sessions.length + ')</div>';
+    html += renderVisitorList(run.sessions, camp.key + '-date' + campaignNav.runIndex);
+    content.innerHTML = html;
+  }
+}
+
+function openCampaign(key){
+  campaignNav = {level: 'campaign', campaignKey: key, runIndex: null};
+  renderCampaignsHub();
+}
+function backToCampaignsList(){
+  campaignNav = {level: 'list', campaignKey: null, runIndex: null};
+  renderCampaignsHub();
+}
+function openCampaignRun(ri){
+  campaignNav.level = 'date';
+  campaignNav.runIndex = ri;
+  renderCampaignsHub();
+}
+function backToCampaignDates(){
+  campaignNav.level = 'campaign';
+  campaignNav.runIndex = null;
+  renderCampaignsHub();
 }
 
 renderAll();
