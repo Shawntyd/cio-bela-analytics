@@ -412,18 +412,21 @@ const TABS = {
     label: 'Campaigns',
     hasSubtabs: true,
     subtabs: {
-      rose: {
-        label: 'Rose Campaign',
+      rose_20260918: {
+        label: 'Rose Campaign — Sep 18, 2026',
         filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
         links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
       }
+      // Next run: add a new dated key here, e.g. rose_20261201, with its own
+      // utm_campaign filter (tag the new run's links with a new campaign value
+      // like mall_rose_promo_dec so this run and the new one stay separate).
     }
   }
 };
 
 let allEntries = [];
 let activeTab = 'qr';
-let activeSubtab = 'rose';
+let activeSubtab = 'rose_20260918';
 
 function buildTabbar(){
   const bar = document.getElementById('tabbar');
