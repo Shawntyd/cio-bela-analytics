@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cio Bela | Analytics Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F5F0E8;
+    --gold:#B8935A;
+    --gold-light:#D4B896;
+    --charcoal:#1A1410;
+    --bark:#2C2016;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--charcoal);
+    color:var(--cream);
+    font-family:'Jost',sans-serif;
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:680px;margin:0 auto;}
+  h1{
+    font-family:'Cormorant Garamond',serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:2rem;
+    margin:0 0 4px;
+    color:var(--cream);
+  }
+  .subtitle{
+    font-size:.82rem;
+    color:var(--gold-light);
+    opacity:.9;
+    margin:0 0 20px;
+  }
+  /* Tabs */
+  .tabbar{
+    display:flex;
+    overflow-x:auto;
+    gap:8px;
+    padding-bottom:10px;
+    margin-bottom:18px;
+    border-bottom:1px solid rgba(184,147,90,.25);
+    -webkit-overflow-scrolling:touch;
+  }
+  .tabbar::-webkit-scrollbar{display:none;}
+  .tab-btn{
+    flex:0 0 auto;
+    font-family:'Jost',sans-serif;
+    font-size:.8rem;
+    font-weight:500;
+    letter-spacing:.02em;
+    background:var(--bark);
+    color:var(--cream);
+    opacity:.65;
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:20px;
+    padding:9px 16px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .tab-btn.active{
+    background:var(--gold);
+    color:var(--charcoal);
+    opacity:1;
+    border-color:var(--gold);
+    font-weight:600;
+  }
+  .subtabbar{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .subtab-btn{
+    font-family:'Jost',sans-serif;
+    font-size:.75rem;
+    background:transparent;
+    color:var(--gold-light);
+    border:1px solid rgba(184,147,90,.4);
+    border-radius:16px;
+    padding:6px 14px;
+    cursor:pointer;
+  }
+  .subtab-btn.active{
+    background:rgba(184,147,90,.2);
+    color:var(--cream);
+  }
+  /* Link library */
+  .link-lib{
+    background:var(--bark);
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:22px;
+  }
+  .link-lib-title{
+    font-size:.72rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--gold-light);
+    margin-bottom:10px;
+  }
+  .link-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid rgba(245,240,232,.08);
+  }
+  .link-row:last-child{border-bottom:none;}
+  .link-info{min-width:0;flex:1;}
+  .link-name{
+    font-size:.85rem;
+    font-weight:500;
+    color:var(--cream);
+  }
+  .link-url{
+    font-size:.68rem;
+    color:var(--cream);
+    opacity:.5;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    margin-top:1px;
+  }
+  .copy-btn{
+    flex-shrink:0;
+    font-family:'Jost',sans-serif;
+    font-size:.72rem;
+    font-weight:500;
+    background:rgba(184,147,90,.2);
+    color:var(--gold-light);
+    border:1px solid rgba(184,147,90,.4);
+    border-radius:8px;
+    padding:7px 12px;
+    cursor:pointer;
+  }
+  .copy-btn.copied{background:var(--gold);color:var(--charcoal);}
+  .link-group-label{
+    font-family:'Cormorant Garamond',serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:1.05rem;
+    color:var(--gold-light);
+    margin:14px 0 2px;
+  }
+  .link-group-label:first-child{margin-top:0;}
+  .empty-note{font-size:.8rem;opacity:.6;padding:6px 0;}
+  /* Data section */
+  .track-btn{
+    display:block;
+    width:100%;
+    font-family:'Jost',sans-serif;
+    font-weight:500;
+    font-size:1rem;
+    background:var(--gold);
+    color:var(--charcoal);
+    padding:14px 20px;
+    border-radius:10px;
+    border:none;
+    letter-spacing:.02em;
+    cursor:pointer;
+    margin-bottom:8px;
+  }
+  .track-btn:active{background:var(--gold-light);}
+  .last-updated{
+    text-align:center;
+    font-size:.72rem;
+    color:var(--cream);
+    opacity:.55;
+    margin-bottom:20px;
+  }
+  .stat-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .stat-card{
+    background:var(--bark);
+    border:1px solid rgba(184,147,90,.35);
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+  }
+  .stat-num{
+    font-family:'Cormorant Garamond',serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:2rem;
+    color:var(--gold-light);
+    line-height:1;
+    margin-bottom:4px;
+  }
+  .stat-label{
+    font-size:.7rem;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    opacity:.75;
+  }
+  .section-title{
+    font-family:'Jost',sans-serif;
+    font-weight:500;
+    font-size:.85rem;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--gold-light);
+    margin:26px 0 12px;
+  }
+  .visitor-card{
+    background:var(--bark);
+    border:1px solid rgba(184,147,90,.25);
+    border-radius:12px;
+    margin-bottom:10px;
+    overflow:hidden;
+  }
+  .visitor-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    cursor:pointer;
+  }
+  .visitor-name{
+    font-family:'Cormorant Garamond',serif;
+    font-style:italic;
+    font-weight:600;
+    font-size:1.1rem;
+    color:var(--cream);
+  }
+  .visitor-meta{
+    font-size:.72rem;
+    opacity:.65;
+    margin-top:2px;
+  }
+  .visitor-chevron{
+    font-size:1.2rem;
+    color:var(--gold-light);
+    transition:transform .2s ease;
+    flex-shrink:0;
+    margin-left:10px;
+  }
+  .visitor-chevron.open{transform:rotate(180deg);}
+  .visitor-path{
+    display:none;
+    padding:0 16px 16px;
+    border-top:1px solid rgba(245,240,232,.08);
+  }
+  .visitor-path.open{display:block;}
+  .path-step{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding:10px 0;
+    border-bottom:1px solid rgba(245,240,232,.06);
+    font-size:.85rem;
+    gap:10px;
+  }
+  .path-step:last-child{border-bottom:none;}
+  .path-step .step-left{flex:1;min-width:0;}
+  .path-num{
+    color:var(--gold-light);
+    font-size:.72rem;
+    margin-right:6px;
+  }
+  .step-label{color:var(--cream);word-break:break-word;}
+  .step-time{color:var(--cream);opacity:.5;font-size:.72rem;margin-top:2px;}
+  .step-duration{
+    color:var(--gold-light);
+    font-size:.78rem;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .tag-pill{
+    display:inline-block;
+    font-size:.65rem;
+    background:rgba(184,147,90,.2);
+    color:var(--gold-light);
+    padding:1px 7px;
+    border-radius:20px;
+    margin-left:6px;
+  }
+  .empty{opacity:.6;font-size:.85rem;padding:10px 0;}
+  .loading{text-align:center;padding:40px 0;opacity:.7;font-size:.9rem;}
+  .error{
+    background:rgba(180,60,50,.15);
+    border:1px solid rgba(180,60,50,.4);
+    border-radius:10px;
+    padding:14px;
+    font-size:.85rem;
+    margin-bottom:20px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Cio Bela Analytics</h1>
+    <p class="subtitle" id="subtitle">All traffic sources, in one place</p>
+
+    <div class="tabbar" id="tabbar"></div>
+    <div class="subtabbar" id="subtabbar" style="display:none;"></div>
+
+    <div id="linkLib"></div>
+
+    <button class="track-btn" id="trackBtn">Track Now</button>
+    <div class="last-updated" id="lastUpdated">Not checked yet</div>
+
+    <div id="content">
+      <div class="loading">Tap "Track Now" to load the latest data.</div>
+    </div>
+  </div>
+
+<script>
+const LOG_URL = 'https://raw.githubusercontent.com/Shawntyd/cio-bela-20-off-promo/main/visits.log';
+const TEST_CAMPAIGNS = ['connection_test', 'retry_check'];
+const TEST_PAGES = ['test', 'retry-test'];
+
+const HAIR = 'https://www.ciobelasalons.com/hair-services';
+const LASHES = 'https://www.ciobelasalons.com/1eyelashextensionsthewoodland-stx';
+const NAILS = 'https://www.ciobelasalons.com/nail-salon-the-woodlands';
+const WAX = 'https://www.ciobelasalons.com/wax-services';
+const HOME = 'https://www.ciobelasalons.com';
+
+function artistLinks(name, slug){
+  return [
+    {label: name + ' — Hair', url: HAIR + '?utm_source=facebook_groups&utm_medium=social&utm_campaign=fb_outreach&utm_content=' + slug},
+    {label: name + ' — Lashes', url: LASHES + '?utm_source=facebook_groups&utm_medium=social&utm_campaign=fb_outreach&utm_content=' + slug},
+    {label: name + ' — Nails', url: NAILS + '?utm_source=facebook_groups&utm_medium=social&utm_campaign=fb_outreach&utm_content=' + slug},
+    {label: name + ' — Wax', url: WAX + '?utm_source=facebook_groups&utm_medium=social&utm_campaign=fb_outreach&utm_content=' + slug}
+  ];
+}
+
+const TABS = {
+  qr: {
+    label: 'QR Screens',
+    filter: e => e.utm_source === 'qr_screens',
+    links: [{label:'In-Salon Screens', url: HOME + '?utm_source=qr_screens&utm_medium=offline&utm_campaign=in_salon'}]
+  },
+  instagram: {
+    label: 'Instagram',
+    filter: e => e.utm_source === 'instagram' || e.utm_source === 'ig',
+    links: [{label:'Bio Link', url: HOME + '?utm_source=instagram&utm_medium=social&utm_campaign=bio_link'}]
+  },
+  tiktok: {
+    label: 'TikTok',
+    filter: e => e.utm_source === 'tiktok',
+    links: [{label:'Bio Link', url: HOME + '?utm_source=tiktok&utm_medium=social&utm_campaign=bio_link'}]
+  },
+  facebook: {
+    label: 'Facebook',
+    filter: e => e.utm_source === 'facebook',
+    links: [{label:'Salon Page Link', url: HOME + '?utm_source=facebook&utm_medium=social&utm_campaign=fb_page'}]
+  },
+  influencers: {
+    label: 'Influencers',
+    filter: e => e.utm_source === 'influencer',
+    grouped: true,
+    links: []
+  },
+  artists: {
+    label: 'Artists',
+    filter: e => e.utm_source === 'facebook_groups',
+    grouped: true,
+    links: [
+      ...artistLinks('Mia','mia'),
+      ...artistLinks('Londyn','londyn'),
+      ...artistLinks('Zoe','zoe'),
+      ...artistLinks('Savannah','savannah'),
+      ...artistLinks('Shawntavia','shawntavia')
+    ]
+  },
+  campaigns: {
+    label: 'Campaigns',
+    hasSubtabs: true,
+    subtabs: {
+      rose: {
+        label: 'Rose Campaign',
+        filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
+        links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
+      }
+    }
+  }
+};
+
+let allEntries = [];
+let activeTab = 'qr';
+let activeSubtab = 'rose';
+
+function buildTabbar(){
+  const bar = document.getElementById('tabbar');
+  bar.innerHTML = '';
+  Object.keys(TABS).forEach(key => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (key === activeTab ? ' active' : '');
+    btn.textContent = TABS[key].label;
+    btn.onclick = () => { activeTab = key; renderAll(); };
+    bar.appendChild(btn);
+  });
+}
+
+function buildSubtabbar(){
+  const bar = document.getElementById('subtabbar');
+  const tab = TABS[activeTab];
+  if (!tab.hasSubtabs){ bar.style.display = 'none'; bar.innerHTML=''; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = '';
+  Object.keys(tab.subtabs).forEach(key => {
+    const btn = document.createElement('button');
+    btn.className = 'subtab-btn' + (key === activeSubtab ? ' active' : '');
+    btn.textContent = tab.subtabs[key].label;
+    btn.onclick = () => { activeSubtab = key; renderAll(); };
+    bar.appendChild(btn);
+  });
+}
+
+function currentConfig(){
+  const tab = TABS[activeTab];
+  if (tab.hasSubtabs) return tab.subtabs[activeSubtab];
+  return tab;
+}
+
+function buildLinkLib(){
+  const cfg = currentConfig();
+  const wrap = document.getElementById('linkLib');
+  if (!cfg.links || cfg.links.length === 0){
+    wrap.innerHTML = '<div class="link-lib"><div class="link-lib-title">Links</div><div class="empty-note">No links added yet — tell me who to add and I\'ll drop them in here.</div></div>';
+    return;
+  }
+  let html = '<div class="link-lib"><div class="link-lib-title">Links</div>';
+  let lastGroup = null;
+  cfg.links.forEach((l, i) => {
+    if (cfg.grouped){
+      const group = l.label.split(' — ')[0];
+      if (group !== lastGroup){
+        html += '<div class="link-group-label">' + escapeHtml(group) + '</div>';
+        lastGroup = group;
+      }
+    }
+    const id = 'link-' + activeTab + '-' + activeSubtab + '-' + i;
+    html += '<div class="link-row"><div class="link-info">';
+    html += '<div class="link-name">' + escapeHtml(cfg.grouped ? l.label.split(' — ').slice(1).join(' — ') : l.label) + '</div>';
+    html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
+    html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
+    html += '</div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function copyLink(id, url){
+  const btn = document.getElementById(id);
+  const done = () => {
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+  } else {
+    fallbackCopy(url, done);
+  }
+}
+function fallbackCopy(url, done){
+  const ta = document.createElement('textarea');
+  ta.value = url;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch(e){}
+  document.body.removeChild(ta);
+}
+
+document.getElementById('trackBtn').addEventListener('click', loadData);
+
+async function loadData(){
+  const content = document.getElementById('content');
+  const btn = document.getElementById('trackBtn');
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+  content.innerHTML = '<div class="loading">Fetching latest visits...</div>';
+
+  try {
+    const resp = await fetch(LOG_URL + '?t=' + Date.now(), {cache:'no-store'});
+    if (!resp.ok) throw new Error('Could not reach the log (status ' + resp.status + ')');
+    const text = await resp.text();
+    const lines = text.split('\n').filter(l => l.trim().length > 0);
+    let entries = lines.map(l => {
+      try { return JSON.parse(l); } catch(e) { return null; }
+    }).filter(e => e !== null);
+
+    entries = entries.filter(e =>
+      !TEST_CAMPAIGNS.includes(e.utm_campaign) && !TEST_PAGES.includes(e.page)
+    );
+
+    allEntries = entries;
+    renderData();
+    document.getElementById('lastUpdated').textContent = 'Last checked: ' + new Date().toLocaleString();
+  } catch(e) {
+    content.innerHTML = '<div class="error">Couldn\'t load the data right now: ' + e.message + '. Try again in a moment.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Track Now';
+  }
+}
+
+function stepLabel(e){
+  if (e.event === 'book_now_click') return 'Tapped "For Rose Holders Only"';
+  if (e.event === 'instagram_click') return 'Tapped Instagram icon';
+  return e.page || '(unknown page)';
+}
+
+function formatDuration(seconds){
+  if (seconds === null || seconds === undefined || isNaN(seconds)) return '';
+  if (seconds < 60) return seconds + 's';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m + 'm ' + s + 's';
+}
+
+function buildSessions(entries){
+  const groups = {};
+  entries.forEach(e => {
+    const sid = e.session_id || 'unlabeled-' + (e.ts || Math.random());
+    (groups[sid] = groups[sid] || []).push(e);
+  });
+
+  let sessions = Object.entries(groups).map(([sid, events]) => {
+    events.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    const steps = [];
+    events.forEach((e, i) => {
+      if (e.event === 'exit') return;
+      let duration = null;
+      const next = events[i+1];
+      if (next) {
+        duration = Math.round((new Date(next.ts) - new Date(e.ts)) / 1000);
+      } else {
+        const matchingExit = events.find(x => x.event === 'exit' && x.page === e.page && new Date(x.ts) >= new Date(e.ts));
+        if (matchingExit && matchingExit.duration_seconds !== '') duration = Number(matchingExit.duration_seconds);
+      }
+      steps.push({
+        ts: e.ts,
+        label: stepLabel(e),
+        duration: duration,
+        isPage: (e.event || 'view') === 'view',
+        tag: e.utm_content || ''
+      });
+    });
+    return {
+      id: sid,
+      firstSeen: events[0].ts,
+      content: events.find(e => e.utm_content)?.utm_content || '',
+      pageCount: steps.filter(s => s.isPage).length,
+      steps
+    };
+  });
+
+  sessions = sessions.filter(s => s.steps.length > 0);
+  sessions.sort((a,b) => new Date(a.firstSeen) - new Date(b.firstSeen));
+  sessions.forEach((s, i) => s.number = i + 1);
+  sessions.sort((a,b) => new Date(b.firstSeen) - new Date(a.firstSeen));
+  return sessions;
+}
+
+function renderData(){
+  const content = document.getElementById('content');
+  const cfg = currentConfig();
+  const filtered = allEntries.filter(cfg.filter);
+
+  if (filtered.length === 0){
+    content.innerHTML = '<div class="empty">No visits logged yet on this tab.</div>';
+    return;
+  }
+
+  const views = filtered.filter(e => (e.event || 'view') === 'view');
+  const sessions = buildSessions(filtered);
+
+  let html = '<div class="stat-grid">';
+  html += statCard(sessions.length, 'Visitors');
+  html += statCard(views.length, 'Total Page Views');
+  html += '</div>';
+
+  if (cfg.grouped){
+    const groups = {};
+    sessions.forEach(s => {
+      const key = s.content || 'Unlabeled';
+      (groups[key] = groups[key] || []).push(s);
+    });
+    Object.keys(groups).sort().forEach(key => {
+      const groupSessions = groups[key];
+      html += '<div class="section-title">' + escapeHtml(capitalize(key)) + ' — Visitor Paths (' + groupSessions.length + ')</div>';
+      html += renderVisitorList(groupSessions, activeTab + '-' + key);
+    });
+  } else {
+    html += '<div class="section-title">Visitor Paths (' + sessions.length + ')</div>';
+    html += renderVisitorList(sessions, activeTab);
+  }
+
+  content.innerHTML = html;
+}
+
+function renderVisitorList(sessions, prefix){
+  let html = '';
+  sessions.forEach((s, idx) => {
+    const domId = prefix + '-' + idx;
+    const first = new Date(s.firstSeen).toLocaleString();
+    html += '<div class="visitor-card">';
+    html += '<div class="visitor-header" onclick="toggleVisitor(\'' + domId + '\')">';
+    html += '<div><div class="visitor-name">Visitor ' + s.number + '</div>';
+    html += '<div class="visitor-meta">' + s.pageCount + ' page' + (s.pageCount===1?'':'s') + ' &middot; started ' + first + '</div></div>';
+    html += '<div class="visitor-chevron" id="chev-' + domId + '">&#9662;</div>';
+    html += '</div>';
+    html += '<div class="visitor-path" id="path-' + domId + '">';
+    s.steps.forEach((step, si) => {
+      const time = step.ts ? new Date(step.ts).toLocaleTimeString() : '';
+      const durationText = step.duration !== null ? formatDuration(step.duration) : (si === s.steps.length-1 ? '—' : '');
+      html += '<div class="path-step"><div class="step-left">';
+      html += '<span class="path-num">' + (si+1) + '.</span><span class="step-label">' + escapeHtml(step.label) + '</span>';
+      if (step.tag) html += '<span class="tag-pill">' + escapeHtml(step.tag) + '</span>';
+      html += '<div class="step-time">' + time + '</div></div>';
+      html += '<div class="step-duration">' + durationText + '</div></div>';
+    });
+    html += '</div></div>';
+  });
+  return html;
+}
+
+function toggleVisitor(idx){
+  const path = document.getElementById('path-' + idx);
+  const chev = document.getElementById('chev-' + idx);
+  path.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function statCard(num, label){
+  return '<div class="stat-card"><div class="stat-num">' + num + '</div><div class="stat-label">' + label + '</div></div>';
+}
+
+function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function renderAll(){
+  buildTabbar();
+  buildSubtabbar();
+  buildLinkLib();
+  if (allEntries.length > 0){
+    renderData();
+  } else {
+    document.getElementById('content').innerHTML = '<div class="loading">Tap "Track Now" to load the latest data.</div>';
+  }
+}
+
+renderAll();
+</script>
+</body>
+</html>
