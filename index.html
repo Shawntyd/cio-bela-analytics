@@ -144,16 +144,47 @@
     cursor:pointer;
   }
   .copy-btn.copied{background:var(--gold);color:var(--charcoal);}
-  .link-group-label{
+  .empty-note{font-size:.8rem;opacity:.6;padding:6px 0;}
+  .link-group-card{
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:10px;
+    margin-bottom:8px;
+    overflow:hidden;
+  }
+  .link-group-card:last-child{margin-bottom:0;}
+  .link-group-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 14px;
+    cursor:pointer;
+    background:rgba(184,147,90,.08);
+  }
+  .link-group-name{
     font-family:'Cormorant Garamond',serif;
     font-style:italic;
     font-weight:600;
     font-size:1.05rem;
     color:var(--gold-light);
-    margin:14px 0 2px;
   }
-  .link-group-label:first-child{margin-top:0;}
-  .empty-note{font-size:.8rem;opacity:.6;padding:6px 0;}
+  .link-group-count{
+    font-size:.68rem;
+    opacity:.55;
+    margin-top:1px;
+  }
+  .link-group-chevron{
+    font-size:1.1rem;
+    color:var(--gold-light);
+    transition:transform .2s ease;
+    flex-shrink:0;
+    margin-left:10px;
+  }
+  .link-group-chevron.open{transform:rotate(180deg);}
+  .link-group-body{
+    display:none;
+    padding:0 14px;
+  }
+  .link-group-body.open{display:block;padding:4px 14px 6px;}
   /* Data section */
   .track-btn{
     display:block;
@@ -434,25 +465,57 @@ function buildLinkLib(){
     wrap.innerHTML = '<div class="link-lib"><div class="link-lib-title">Links</div><div class="empty-note">No links added yet — tell me who to add and I\'ll drop them in here.</div></div>';
     return;
   }
+
   let html = '<div class="link-lib"><div class="link-lib-title">Links</div>';
-  let lastGroup = null;
-  cfg.links.forEach((l, i) => {
-    if (cfg.grouped){
-      const group = l.label.split(' — ')[0];
-      if (group !== lastGroup){
-        html += '<div class="link-group-label">' + escapeHtml(group) + '</div>';
-        lastGroup = group;
-      }
-    }
-    const id = 'link-' + activeTab + '-' + activeSubtab + '-' + i;
-    html += '<div class="link-row"><div class="link-info">';
-    html += '<div class="link-name">' + escapeHtml(cfg.grouped ? l.label.split(' — ').slice(1).join(' — ') : l.label) + '</div>';
-    html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
-    html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
-    html += '</div>';
-  });
+
+  if (cfg.grouped){
+    const groups = {};
+    const order = [];
+    cfg.links.forEach(l => {
+      const name = l.label.split(' — ')[0];
+      const rest = l.label.split(' — ').slice(1).join(' — ');
+      if (!groups[name]){ groups[name] = []; order.push(name); }
+      groups[name].push({label: rest, url: l.url});
+    });
+    order.forEach((name, gi) => {
+      const gid = 'linkgrp-' + activeTab + '-' + gi;
+      html += '<div class="link-group-card">';
+      html += '<div class="link-group-header" onclick="toggleLinkGroup(\'' + gid + '\')">';
+      html += '<div><div class="link-group-name">' + escapeHtml(name) + '</div>';
+      html += '<div class="link-group-count">' + groups[name].length + ' link' + (groups[name].length===1?'':'s') + '</div></div>';
+      html += '<div class="link-group-chevron" id="chev-' + gid + '">&#9662;</div>';
+      html += '</div>';
+      html += '<div class="link-group-body" id="body-' + gid + '">';
+      groups[name].forEach((l, i) => {
+        const id = 'link-' + gid + '-' + i;
+        html += '<div class="link-row"><div class="link-info">';
+        html += '<div class="link-name">' + escapeHtml(l.label) + '</div>';
+        html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
+        html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+  } else {
+    cfg.links.forEach((l, i) => {
+      const id = 'link-' + activeTab + '-' + activeSubtab + '-' + i;
+      html += '<div class="link-row"><div class="link-info">';
+      html += '<div class="link-name">' + escapeHtml(l.label) + '</div>';
+      html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
+      html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\')">Copy</button>';
+      html += '</div>';
+    });
+  }
+
   html += '</div>';
   wrap.innerHTML = html;
+}
+
+function toggleLinkGroup(gid){
+  const body = document.getElementById('body-' + gid);
+  const chev = document.getElementById('chev-' + gid);
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
 }
 
 function copyLink(id, url){
