@@ -412,21 +412,21 @@ const TABS = {
     label: 'Campaigns',
     hasSubtabs: true,
     subtabs: {
-      rose_20260918: {
-        label: 'Rose Campaign — Sep 18, 2026',
+      rose: {
+        label: 'Rose Campaign',
         filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
+        dateGrouped: true,
         links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
       }
-      // Next run: add a new dated key here, e.g. rose_20261201, with its own
-      // utm_campaign filter (tag the new run's links with a new campaign value
-      // like mall_rose_promo_dec so this run and the new one stay separate).
+      // Reruns need no new tags — visits automatically split into separate
+      // runs below based on date gaps in the data (see clusterSessionsByDate).
     }
   }
 };
 
 let allEntries = [];
 let activeTab = 'qr';
-let activeSubtab = 'rose_20260918';
+let activeSubtab = 'rose';
 
 function buildTabbar(){
   const bar = document.getElementById('tabbar');
@@ -590,6 +590,34 @@ function formatDuration(seconds){
   return m + 'm ' + s + 's';
 }
 
+function clusterSessionsByDate(sessions){
+  const GAP_DAYS = 3; // a gap this long between visits = a new campaign run
+  const sorted = [...sessions].sort((a,b) => new Date(a.firstSeen) - new Date(b.firstSeen));
+  const clusters = [];
+  let current = [];
+  let lastDate = null;
+  sorted.forEach(s => {
+    const d = new Date(s.firstSeen);
+    if (lastDate && (d - lastDate) > GAP_DAYS * 24 * 60 * 60 * 1000){
+      clusters.push(current);
+      current = [];
+    }
+    current.push(s);
+    lastDate = d;
+  });
+  if (current.length) clusters.push(current);
+
+  const fmt = d => d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  const runs = clusters.map(c => {
+    const start = new Date(c[0].firstSeen);
+    const end = new Date(c[c.length-1].firstSeen);
+    const label = fmt(start) === fmt(end) ? fmt(start) : fmt(start) + ' – ' + fmt(end);
+    return {label, sessions: [...c].sort((a,b) => new Date(b.firstSeen) - new Date(a.firstSeen))};
+  });
+  runs.sort((a,b) => new Date(b.sessions[0].firstSeen) - new Date(a.sessions[0].firstSeen));
+  return runs;
+}
+
 function buildSessions(entries){
   const groups = {};
   entries.forEach(e => {
@@ -662,6 +690,12 @@ function renderData(){
       const groupSessions = groups[key];
       html += '<div class="section-title">' + escapeHtml(capitalize(key)) + ' — Visitor Paths (' + groupSessions.length + ')</div>';
       html += renderVisitorList(groupSessions, activeTab + '-' + key);
+    });
+  } else if (cfg.dateGrouped){
+    const runs = clusterSessionsByDate(sessions);
+    runs.forEach((run, ri) => {
+      html += '<div class="section-title">Run: ' + escapeHtml(run.label) + ' — Visitor Paths (' + run.sessions.length + ')</div>';
+      html += renderVisitorList(run.sessions, activeTab + '-run' + ri);
     });
   } else {
     html += '<div class="section-title">Visitor Paths (' + sessions.length + ')</div>';
