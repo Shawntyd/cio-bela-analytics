@@ -591,6 +591,7 @@ async function loadData(){
 function stepLabel(e){
   if (e.event === 'book_now_click') return 'Tapped "For Rose Holders Only"';
   if (e.event === 'instagram_click') return 'Tapped Instagram icon';
+  if (e.page === '/') return 'Homepage';
   return e.page || '(unknown page)';
 }
 
