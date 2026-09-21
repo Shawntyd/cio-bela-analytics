@@ -375,6 +375,7 @@ const TABS = {
     label: 'Artists',
     filter: e => e.utm_source === 'facebook_groups',
     grouped: true,
+    brandPrefix: true,
     links: [
       ...artistLinks('Savannah','savannah'),
       ...artistLinks('Zoe','zoe'),
@@ -504,7 +505,7 @@ function buildLinkLibFor(cfg){
         html += '<div class="link-row"><div class="link-info">';
         html += '<div class="link-name">' + escapeHtml(l.label) + '</div>';
         html += '<div class="link-url">' + escapeHtml(l.url) + '</div></div>';
-        html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\',true)">Copy</button>';
+        html += '<button class="copy-btn" id="' + id + '" onclick="copyLink(\'' + id + '\',\'' + l.url.replace(/'/g,"\\'") + '\',' + (!!cfg.brandPrefix) + ')">Copy</button>';
         html += '</div>';
       });
       html += '</div></div>';
