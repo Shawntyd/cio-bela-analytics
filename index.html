@@ -447,6 +447,12 @@ function isSearchEngineReferrer(referrer){
   } catch(e){ return false; }
 }
 
+function isGrouponReferrer(referrer){
+  if (!referrer) return false;
+  try { return new URL(referrer).hostname.toLowerCase().includes('groupon.com'); }
+  catch(e){ return false; }
+}
+
 const TABS = {
   artists: {
     label: 'Artists',
@@ -518,6 +524,10 @@ const TABS = {
     label: 'Referral Sites',
     grouped: true,
     note: 'No link to copy — this is traffic from other websites linking to you that isn\'t search and isn\'t one of your tracked channels: a blog mention, a directory listing, a local partner\'s site. Grouped by which site sent them.'
+  },
+  groupon: {
+    label: 'Groupon',
+    links: [{label:'Groupon Listing Website Link', url: HOME + '?utm_source=groupon&utm_medium=coupon&utm_campaign=groupon_listing'}]
   }
 };
 
@@ -904,6 +914,11 @@ function classifySessions(){
       return;
     }
 
+    if (evts.some(e => isGrouponReferrer(e.referrer))){
+      result[sid] = {type: 'groupon_referral'};
+      return;
+    }
+
     const sorted = [...evts].sort((a,b) => new Date(a.ts) - new Date(b.ts));
     const first = sorted.find(e => (e.event || 'view') === 'view') || sorted[0];
     if (!first) return;
@@ -953,12 +968,24 @@ function getReferralSessionEntries(){
   return { entries, domains };
 }
 
+function getGrouponSessionEntries(){
+  // Two sources: a tracked link (utm_source=groupon, deterministic — Layer 2,
+  // if/when there's an editable link on the Groupon listing) and a plain
+  // groupon.com referrer with no tag at all (passive — Layer 1, works today).
+  const classified = classifySessions();
+  const referralIds = new Set(Object.entries(classified).filter(([,c]) => c.type === 'groupon_referral').map(([sid]) => sid));
+  const taggedIds = new Set(allEntries.filter(e => e.utm_source === 'groupon' && e.session_id).map(e => e.session_id));
+  const entries = allEntries.filter(e => e.session_id && (referralIds.has(e.session_id) || taggedIds.has(e.session_id)));
+  return { entries, taggedIds, referralIds };
+}
+
 function renderData(){
   const content = document.getElementById('content');
   const runbar = document.getElementById('runtabbar');
   const cfg = currentConfig();
   let searchLabels = null;
   let referralDomains = null;
+  let grouponInfo = null;
   let filtered;
   if (activeTab === 'search'){
     const r = getSearchEngineSessionEntries();
@@ -970,6 +997,10 @@ function renderData(){
     const r = getReferralSessionEntries();
     filtered = r.entries;
     referralDomains = r.domains;
+  } else if (activeTab === 'groupon'){
+    const r = getGrouponSessionEntries();
+    filtered = r.entries;
+    grouponInfo = r;
   } else {
     filtered = allEntries.filter(cfg.filter);
   }
@@ -1048,6 +1079,19 @@ function renderData(){
       html += '<div class="section-title">' + escapeHtml(key) + ' — Visitor Paths (' + groupSessions.length + ')</div>';
       html += renderVisitorList(groupSessions, activeTab + '-' + key);
     });
+  } else if (activeTab === 'groupon' && grouponInfo){
+    const tracked = sessions.filter(s => grouponInfo.taggedIds.has(s.id));
+    const viaReferrer = sessions.filter(s => grouponInfo.referralIds.has(s.id));
+    if (tracked.length){
+      html += '<div class="section-title">✅ Tracked Link — Visitor Paths (' + tracked.length + ')</div>';
+      html += '<div class="empty-note" style="margin:-6px 0 12px;">Came through the Groupon Listing Website Link above.</div>';
+      html += renderVisitorList(tracked, activeTab + '-tracked');
+    }
+    if (viaReferrer.length){
+      html += '<div class="section-title">🟡 Detected via Referrer — Visitor Paths (' + viaReferrer.length + ')</div>';
+      html += '<div class="empty-note" style="margin:-6px 0 12px;">No tracked link, but the browser referrer showed groupon.com directly. Real Groupon traffic, just not from the tagged link.</div>';
+      html += renderVisitorList(viaReferrer, activeTab + '-referrer');
+    }
   } else if (cfg.grouped){
     const groups = {};
     sessions.forEach(s => {
@@ -1426,6 +1470,13 @@ function buildExportData(){
   Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = summarizeSessions(grp); });
   export_data.tabs['Referral Sites'] = { by_domain };
 
+  const grouponResult = getGrouponSessionEntries();
+  const grouponSessions = buildSessions(grouponResult.entries);
+  export_data.tabs['Groupon'] = {
+    tracked_link: summarizeSessions(grouponSessions.filter(s => grouponResult.taggedIds.has(s.id))),
+    detected_via_referrer: summarizeSessions(grouponSessions.filter(s => grouponResult.referralIds.has(s.id)))
+  };
+
   const campaigns_by_name = {};
   TABS.campaigns.campaignsList.forEach(camp => {
     const sessions = buildSessions(allEntries.filter(camp.filter));
@@ -1631,6 +1682,11 @@ async function exportPdfReport(){
         renderSummaryBlock(tabData.confirmed);
         h2('Likely From Search (Unconfirmed)');
         renderSummaryBlock(tabData.likely_unconfirmed);
+      } else if (tabData.tracked_link && tabData.detected_via_referrer){
+        h2('Tracked Link');
+        renderSummaryBlock(tabData.tracked_link);
+        h2('Detected via Referrer (Unconfirmed)');
+        renderSummaryBlock(tabData.detected_via_referrer);
       } else if (tabData.by_domain){
         Object.entries(tabData.by_domain).forEach(([domain, summary]) => {
           h3(domain);
