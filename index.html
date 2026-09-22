@@ -387,6 +387,7 @@
     margin-bottom:20px;
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -401,7 +402,10 @@
     <div class="subtabbar" id="runtabbar" style="display:none;"></div>
 
     <button class="track-btn" id="trackBtn">Track Now</button>
-    <button class="filter-clear" id="exportBtn" style="display:block;width:100%;text-align:center;margin-top:8px;padding:10px;" onclick="exportAllData()">Export</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="filter-clear" id="exportBtn" style="flex:1;text-align:center;padding:10px;" onclick="exportAllData()">Export (Data)</button>
+      <button class="filter-clear" id="exportPdfBtn" style="flex:1;text-align:center;padding:10px;" onclick="exportPdfReport()">Export (PDF Report)</button>
+    </div>
     <div class="last-updated" id="lastUpdated">Not checked yet</div>
 
     <div id="content">
@@ -1370,6 +1374,86 @@ function summarizeSessions(sessions){
   };
 }
 
+function buildExportData(){
+  const export_data = {
+    generated_at: new Date().toISOString(),
+    business: 'Cio Bela Multi-Service Salon (ciobelasalons.com)',
+    note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business, organized exactly like the dashboard tabs it came from. Session-level: each visitor is one entry, grouped under the channel/tab that brought them in. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
+    tabs: {}
+  };
+
+  [['qr','QR Screens'], ['instagram','Instagram'], ['tiktok','TikTok'], ['facebook','Facebook']].forEach(([key,label]) => {
+    const cfg = TABS[key];
+    const sessions = buildSessions(allEntries.filter(cfg.filter));
+    export_data.tabs[label] = summarizeSessions(sessions);
+  });
+
+  [['artists','Artists'], ['influencers','Influencers']].forEach(([key,label]) => {
+    const cfg = TABS[key];
+    const sessions = buildSessions(allEntries.filter(cfg.filter));
+    const groups = {};
+    sessions.forEach(s => {
+      const k = s.content ? capitalize(s.content) : 'Unlabeled';
+      (groups[k] = groups[k] || []).push(s);
+    });
+    const by_person = {};
+    Object.entries(groups).forEach(([name, grp]) => { by_person[name] = summarizeSessions(grp); });
+    export_data.tabs[label] = { overall: summarizeSessions(sessions), by_person };
+  });
+
+  const classified = classifySessions();
+  const confirmedIds = new Set(), likelyIds = new Set();
+  Object.entries(classified).forEach(([sid,c]) => {
+    if (c.type === 'search_confirmed') confirmedIds.add(sid);
+    if (c.type === 'search_likely') likelyIds.add(sid);
+  });
+  const allSessionsBuilt = buildSessions(allEntries.filter(e => e.session_id));
+  export_data.tabs['Search Engines'] = {
+    confirmed: summarizeSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
+    likely_unconfirmed: summarizeSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
+  };
+
+  export_data.tabs['Direct / Brand'] = summarizeSessions(buildSessions(getDirectSessionEntries()));
+
+  const refResult = getReferralSessionEntries();
+  const refSessions = buildSessions(refResult.entries);
+  const refGroups = {};
+  refSessions.forEach(s => {
+    const domain = refResult.domains[s.id] || 'Unknown site';
+    (refGroups[domain] = refGroups[domain] || []).push(s);
+  });
+  const by_domain = {};
+  Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = summarizeSessions(grp); });
+  export_data.tabs['Referral Sites'] = { by_domain };
+
+  const campaigns_by_name = {};
+  TABS.campaigns.campaignsList.forEach(camp => {
+    const sessions = buildSessions(allEntries.filter(camp.filter));
+    const runs = clusterSessionsByDate(sessions).map(run => ({
+      date_range: run.label,
+      ...summarizeSessions(run.sessions)
+    }));
+    campaigns_by_name[camp.label] = { runs };
+  });
+  export_data.tabs['Campaigns'] = campaigns_by_name;
+
+  if (scData && scData.rows){
+    export_data.tabs['Search Console'] = {
+      note: 'Official Google Search Console data — separate source, day-level only, not session-based.',
+      range_days: scDays,
+      device_filter: scDevice || 'all',
+      total_clicks: scData.rows.reduce((n,r) => n + r.clicks, 0),
+      total_impressions: scData.rows.reduce((n,r) => n + r.impressions, 0),
+      top_queries: [...scData.rows].sort((a,b) => b.clicks - a.clicks).slice(0, 20).map(r => ({
+        query: r.keys[0], landing_page: r.keys[1] || '', clicks: r.clicks,
+        impressions: r.impressions, ctr: r.ctr, avg_position: r.position
+      }))
+    };
+  }
+
+  return export_data;
+}
+
 async function exportAllData(){
   const btn = document.getElementById('exportBtn');
   if (allEntries.length === 0){
@@ -1378,85 +1462,10 @@ async function exportAllData(){
   }
   btn.disabled = true;
   const originalText = btn.textContent;
-  btn.textContent = 'Building export...';
+  btn.textContent = 'Building...';
 
   try {
-    const export_data = {
-      generated_at: new Date().toISOString(),
-      business: 'Cio Bela Multi-Service Salon (ciobelasalons.com)',
-      note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business, organized exactly like the dashboard tabs it came from. Session-level: each visitor is one entry, grouped under the channel/tab that brought them in. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
-      tabs: {}
-    };
-
-    [['qr','QR Screens'], ['instagram','Instagram'], ['tiktok','TikTok'], ['facebook','Facebook']].forEach(([key,label]) => {
-      const cfg = TABS[key];
-      const sessions = buildSessions(allEntries.filter(cfg.filter));
-      export_data.tabs[label] = summarizeSessions(sessions);
-    });
-
-    [['artists','Artists'], ['influencers','Influencers']].forEach(([key,label]) => {
-      const cfg = TABS[key];
-      const sessions = buildSessions(allEntries.filter(cfg.filter));
-      const groups = {};
-      sessions.forEach(s => {
-        const k = s.content ? capitalize(s.content) : 'Unlabeled';
-        (groups[k] = groups[k] || []).push(s);
-      });
-      const by_person = {};
-      Object.entries(groups).forEach(([name, grp]) => { by_person[name] = summarizeSessions(grp); });
-      export_data.tabs[label] = { overall: summarizeSessions(sessions), by_person };
-    });
-
-    const classified = classifySessions();
-    const confirmedIds = new Set(), likelyIds = new Set();
-    Object.entries(classified).forEach(([sid,c]) => {
-      if (c.type === 'search_confirmed') confirmedIds.add(sid);
-      if (c.type === 'search_likely') likelyIds.add(sid);
-    });
-    const allSessionsBuilt = buildSessions(allEntries.filter(e => e.session_id));
-    export_data.tabs['Search Engines'] = {
-      confirmed: summarizeSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
-      likely_unconfirmed: summarizeSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
-    };
-
-    export_data.tabs['Direct / Brand'] = summarizeSessions(buildSessions(getDirectSessionEntries()));
-
-    const refResult = getReferralSessionEntries();
-    const refSessions = buildSessions(refResult.entries);
-    const refGroups = {};
-    refSessions.forEach(s => {
-      const domain = refResult.domains[s.id] || 'Unknown site';
-      (refGroups[domain] = refGroups[domain] || []).push(s);
-    });
-    const by_domain = {};
-    Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = summarizeSessions(grp); });
-    export_data.tabs['Referral Sites'] = { by_domain };
-
-    const campaigns_by_name = {};
-    TABS.campaigns.campaignsList.forEach(camp => {
-      const sessions = buildSessions(allEntries.filter(camp.filter));
-      const runs = clusterSessionsByDate(sessions).map(run => ({
-        date_range: run.label,
-        ...summarizeSessions(run.sessions)
-      }));
-      campaigns_by_name[camp.label] = { runs };
-    });
-    export_data.tabs['Campaigns'] = campaigns_by_name;
-
-    if (scData && scData.rows){
-      export_data.tabs['Search Console'] = {
-        note: 'Official Google Search Console data — separate source, day-level only, not session-based.',
-        range_days: scDays,
-        device_filter: scDevice || 'all',
-        total_clicks: scData.rows.reduce((n,r) => n + r.clicks, 0),
-        total_impressions: scData.rows.reduce((n,r) => n + r.impressions, 0),
-        top_queries: [...scData.rows].sort((a,b) => b.clicks - a.clicks).slice(0, 20).map(r => ({
-          query: r.keys[0], landing_page: r.keys[1] || '', clicks: r.clicks,
-          impressions: r.impressions, ctr: r.ctr, avg_position: r.position
-        }))
-      };
-    }
-
+    const export_data = buildExportData();
     const blob = new Blob([JSON.stringify(export_data, null, 2)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1468,6 +1477,199 @@ async function exportAllData(){
     URL.revokeObjectURL(url);
   } catch(e){
     alert('Export failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// ══════════════════════════════════════════
+// PDF REPORT — same data, laid out for a human to actually read
+// ══════════════════════════════════════════
+
+function fmtDuration(seconds){
+  if (!seconds) return '0s';
+  if (seconds < 60) return seconds + 's';
+  const m = Math.floor(seconds / 60), s = seconds % 60;
+  return m + 'm ' + s + 's';
+}
+
+async function exportPdfReport(){
+  const btn = document.getElementById('exportPdfBtn');
+  if (allEntries.length === 0){
+    alert('Tap "Track Now" first to load data, then export.');
+    return;
+  }
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Building...';
+
+  try {
+    const data = buildExportData();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 50;
+    const contentW = pageW - margin * 2;
+
+    const GOLD = [184, 147, 90];
+    const CHARCOAL = [26, 20, 16];
+    const CREAM = [245, 240, 232];
+    const GRAY = [110, 100, 90];
+
+    let y = margin;
+
+    function newPageIfNeeded(spaceNeeded){
+      if (y + spaceNeeded > pageH - margin){
+        doc.addPage();
+        y = margin;
+      }
+    }
+
+    function h1(text){
+      newPageIfNeeded(40);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(...CHARCOAL);
+      doc.text(text, margin, y);
+      y += 8;
+      doc.setDrawColor(...GOLD);
+      doc.setLineWidth(1.5);
+      doc.line(margin, y, margin + contentW, y);
+      y += 22;
+    }
+
+    function h2(text){
+      newPageIfNeeded(28);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...CHARCOAL);
+      doc.text(text, margin, y);
+      y += 18;
+    }
+
+    function h3(text){
+      newPageIfNeeded(20);
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(11);
+      doc.setTextColor(140, 110, 60);
+      doc.text(text, margin, y);
+      y += 15;
+    }
+
+    function statLine(label, value){
+      newPageIfNeeded(16);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.5);
+      doc.setTextColor(...GRAY);
+      doc.text(label, margin + 10, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...CHARCOAL);
+      doc.text(String(value), margin + 220, y);
+      y += 15;
+    }
+
+    function topPagesLine(pages){
+      if (!pages || pages.length === 0) return;
+      newPageIfNeeded(14 * pages.length + 6);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9.5);
+      doc.setTextColor(...GRAY);
+      doc.text('Top pages:', margin + 10, y);
+      y += 13;
+      pages.forEach(p => {
+        newPageIfNeeded(13);
+        doc.setFont('helvetica', 'normal');
+        doc.text('•  ' + p.page + '  (' + p.visits + ' visit' + (p.visits===1?'':'s') + ')', margin + 20, y);
+        y += 13;
+      });
+      y += 4;
+    }
+
+    function renderSummaryBlock(summary){
+      statLine('Visitors', summary.visitors);
+      statLine('Total Page Views', summary.total_page_views);
+      statLine('Avg. Time on Site', fmtDuration(summary.avg_time_on_site_seconds));
+      topPagesLine(summary.top_pages);
+      y += 6;
+    }
+
+    // ---- Cover ----
+    doc.setFillColor(...CHARCOAL);
+    doc.rect(0, 0, pageW, pageH, 'F');
+    doc.setFont('helvetica', 'bolditalic');
+    doc.setFontSize(30);
+    doc.setTextColor(...CREAM);
+    doc.text('Cio Bela', pageW/2, pageH/2 - 60, {align:'center'});
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(16);
+    doc.setTextColor(...GOLD);
+    doc.text('Analytics Report', pageW/2, pageH/2 - 30, {align:'center'});
+    doc.setFontSize(10.5);
+    doc.setTextColor(...CREAM);
+    doc.text('Generated ' + new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}), pageW/2, pageH/2 + 10, {align:'center'});
+    doc.text('ciobelasalons.com', pageW/2, pageH/2 + 28, {align:'center'});
+
+    doc.addPage();
+    y = margin;
+
+    // ---- Sections ----
+    Object.entries(data.tabs).forEach(([tabName, tabData]) => {
+      h1(tabName);
+
+      if (tabData.overall && tabData.by_person){
+        h2('Overall');
+        renderSummaryBlock(tabData.overall);
+        h2('By Person');
+        Object.entries(tabData.by_person).forEach(([name, summary]) => {
+          h3(name);
+          renderSummaryBlock(summary);
+        });
+      } else if (tabData.confirmed && tabData.likely_unconfirmed){
+        h2('Confirmed From Search');
+        renderSummaryBlock(tabData.confirmed);
+        h2('Likely From Search (Unconfirmed)');
+        renderSummaryBlock(tabData.likely_unconfirmed);
+      } else if (tabData.by_domain){
+        Object.entries(tabData.by_domain).forEach(([domain, summary]) => {
+          h3(domain);
+          renderSummaryBlock(summary);
+        });
+      } else if (tabName === 'Campaigns'){
+        Object.entries(tabData).forEach(([campName, camp]) => {
+          h2(campName);
+          camp.runs.forEach(run => {
+            h3(run.date_range);
+            renderSummaryBlock(run);
+          });
+        });
+      } else if (tabName === 'Search Console'){
+        statLine('Total Clicks', tabData.total_clicks);
+        statLine('Total Impressions', tabData.total_impressions);
+        statLine('Range', 'Last ' + tabData.range_days + ' days (' + tabData.device_filter + ')');
+        y += 6;
+        h2('Top Queries');
+        tabData.top_queries.slice(0, 15).forEach(q => {
+          newPageIfNeeded(14);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9.5);
+          doc.setTextColor(...CHARCOAL);
+          const line = '"' + q.query + '"  —  ' + q.clicks + ' clicks, ' + q.impressions + ' impressions, position ' + q.avg_position.toFixed(1);
+          doc.text(line, margin + 10, y);
+          y += 14;
+        });
+        y += 6;
+      } else {
+        renderSummaryBlock(tabData);
+      }
+
+      y += 10;
+    });
+
+    doc.save('cio-bela-analytics-report-' + new Date().toISOString().split('T')[0] + '.pdf');
+  } catch(e){
+    alert('PDF export failed: ' + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
