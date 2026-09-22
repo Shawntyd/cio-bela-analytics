@@ -428,6 +428,20 @@ function artistLinks(name, slug){
   ];
 }
 
+// Search engines aren't a link we hand out — there's nothing to tag. Instead
+// this looks at the referrer every visit already carries and checks it
+// against known search engine domains, as long as no utm_source is present
+// (an empty utm_source + a search-engine referrer = organic search; a Google
+// Ads click would carry its own utm_source and show up under a paid tab instead).
+const SEARCH_ENGINE_DOMAINS = ['google.', 'bing.', 'yahoo.', 'duckduckgo.', 'ecosia.', 'baidu.', 'yandex.', 'ask.com', 'aol.'];
+function isSearchEngineReferrer(referrer){
+  if (!referrer) return false;
+  try {
+    const host = new URL(referrer).hostname.toLowerCase();
+    return SEARCH_ENGINE_DOMAINS.some(d => host.includes(d));
+  } catch(e){ return false; }
+}
+
 const TABS = {
   artists: {
     label: 'Artists',
@@ -441,6 +455,11 @@ const TABS = {
       ...artistLinks('Londyn','londyn'),
       ...artistLinks('Shawntavia','shawntavia')
     ]
+  },
+  search: {
+    label: 'Search Engines',
+    filter: e => (!e.utm_source || e.utm_source === '') && isSearchEngineReferrer(e.referrer),
+    note: 'No link to copy here — this tab reads organic Google/Bing/Yahoo/DuckDuckGo traffic automatically from each visit\'s referrer. Nothing to hand out or tag.'
   },
   qr: {
     label: 'QR Screens',
@@ -533,6 +552,10 @@ function buildLinkLib(){
 
 function buildLinkLibFor(cfg){
   const wrap = document.getElementById('linkLib');
+  if (cfg.note){
+    wrap.innerHTML = '<div class="link-lib"><div class="link-lib-title">Links</div><div class="empty-note">' + cfg.note + '</div></div>';
+    return;
+  }
   if (!cfg.links || cfg.links.length === 0){
     wrap.innerHTML = '<div class="link-lib"><div class="link-lib-title">Links</div><div class="empty-note">No links added yet — tell me who to add and I\'ll drop them in here.</div></div>';
     return;
