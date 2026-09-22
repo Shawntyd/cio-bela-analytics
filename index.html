@@ -499,6 +499,11 @@ const TABS = {
       }
       // Future campaigns get added here as new entries in this list.
     ]
+  },
+  searchconsole: {
+    label: 'Search Console',
+    isSearchConsole: true,
+    note: 'Official Google data — real search queries, clicks, impressions, and position, straight from Search Console. Complements the Search Engines tab, which shows visitor paths but can miss traffic when the browser strips referrer info (common on mobile).'
   }
 };
 
@@ -1015,6 +1020,18 @@ function renderAll(){
     return;
   }
 
+  if (TABS[activeTab].isSearchConsole){
+    document.getElementById('subtabbar').style.display = 'none';
+    document.getElementById('subtabbar').innerHTML = '';
+    document.getElementById('runtabbar').style.display = 'none';
+    document.getElementById('runtabbar').innerHTML = '';
+    document.getElementById('artistFilterBar').style.display = 'none';
+    document.getElementById('artistFilterBar').innerHTML = '';
+    buildLinkLibFor(TABS.searchconsole);
+    renderSearchConsole();
+    return;
+  }
+
   buildSubtabbar();
   buildLinkLib();
   buildArtistFilterBar();
@@ -1023,6 +1040,88 @@ function renderAll(){
   } else {
     document.getElementById('content').innerHTML = '<div class="loading">Tap "Track Now" to load the latest data.</div>';
   }
+}
+
+const SC_WORKER_URL = 'https://cio-bela-search-console.shawntyd96.workers.dev/';
+let scDevice = '';
+let scDays = 28;
+let scData = null;
+
+function renderSearchConsole(){
+  const content = document.getElementById('content');
+  let html = '<div class="filter-box" style="margin-bottom:18px;">';
+  html += '<div class="filter-group"><div class="filter-label">Device</div><div class="filter-pills">';
+  [['', 'All'], ['MOBILE','Mobile'], ['DESKTOP','Desktop'], ['TABLET','Tablet']].forEach(([val,label]) => {
+    html += '<button class="filter-pill' + (scDevice===val?' active':'') + '" onclick="setScDevice(\'' + val + '\')">' + label + '</button>';
+  });
+  html += '</div></div>';
+  html += '<div class="filter-group"><div class="filter-label">Time Range</div><div class="filter-pills">';
+  [[7,'7 days'],[28,'28 days'],[90,'90 days']].forEach(([val,label]) => {
+    html += '<button class="filter-pill' + (scDays===val?' active':'') + '" onclick="setScDays(' + val + ')">' + label + '</button>';
+  });
+  html += '</div></div>';
+  html += '</div>';
+  html += '<button class="track-btn" onclick="loadSearchConsole()" id="scLoadBtn">Load Search Console Data</button>';
+  html += '<div id="scResults">' + (scData ? '' : '<div class="loading" style="margin-top:16px;">Tap above to load.</div>') + '</div>';
+  content.innerHTML = html;
+  if (scData) renderScResults();
+}
+
+function setScDevice(val){ scDevice = val; renderSearchConsole(); if (scData) loadSearchConsole(); }
+function setScDays(val){ scDays = val; renderSearchConsole(); if (scData) loadSearchConsole(); }
+
+async function loadSearchConsole(){
+  const btn = document.getElementById('scLoadBtn');
+  const results = document.getElementById('scResults');
+  if (btn){ btn.disabled = true; btn.textContent = 'Loading...'; }
+  results.innerHTML = '<div class="loading" style="margin-top:16px;">Fetching from Search Console...</div>';
+  try {
+    let url = SC_WORKER_URL + '?days=' + scDays;
+    if (scDevice) url += '&device=' + scDevice;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.error){ throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error)); }
+    scData = data;
+    renderScResults();
+  } catch(e){
+    results.innerHTML = '<div class="error">Couldn\'t load Search Console data: ' + escapeHtml(e.message) + '</div>';
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = 'Load Search Console Data'; }
+  }
+}
+
+function renderScResults(){
+  const results = document.getElementById('scResults');
+  if (!scData || !scData.rows || scData.rows.length === 0){
+    results.innerHTML = '<div class="empty" style="margin-top:16px;">No search data for this range.</div>';
+    return;
+  }
+  const rows = [...scData.rows].sort((a,b) => b.clicks - a.clicks);
+  const totalClicks = rows.reduce((n,r) => n + r.clicks, 0);
+  const totalImpressions = rows.reduce((n,r) => n + r.impressions, 0);
+
+  let html = '<div class="stat-grid" style="margin-top:16px;">';
+  html += statCard(totalClicks, 'Total Clicks');
+  html += statCard(totalImpressions, 'Impressions');
+  html += '</div>';
+  html += '<div class="section-title">Top Search Queries (' + rows.length + ')</div>';
+
+  rows.forEach(r => {
+    const query = r.keys[0];
+    const page = r.keys[1] || '';
+    const ctr = (r.ctr * 100).toFixed(1) + '%';
+    const pos = r.position.toFixed(1);
+    html += '<div class="visitor-card"><div style="padding:14px 16px;">';
+    html += '<div class="visitor-name">"' + escapeHtml(query) + '"</div>';
+    html += '<div class="visitor-meta" style="margin-top:4px;word-break:break-all;">Lands on: ' + escapeHtml(page.replace('https://www.ciobelasalons.com','') || '/') + '</div>';
+    html += '<div style="display:flex;gap:16px;margin-top:8px;font-size:.78rem;color:var(--gold-light);">';
+    html += '<span>' + r.clicks + ' click' + (r.clicks===1?'':'s') + '</span>';
+    html += '<span>' + r.impressions + ' impressions</span>';
+    html += '<span>' + ctr + ' CTR</span>';
+    html += '<span>avg. position ' + pos + '</span>';
+    html += '</div></div></div>';
+  });
+  results.innerHTML = html;
 }
 
 function renderCampaignsHub(){
