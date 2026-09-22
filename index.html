@@ -401,6 +401,7 @@
     <div class="subtabbar" id="runtabbar" style="display:none;"></div>
 
     <button class="track-btn" id="trackBtn">Track Now</button>
+    <button class="filter-clear" id="exportBtn" style="display:block;width:100%;text-align:center;margin-top:8px;padding:10px;" onclick="exportAllData()">📤 Export All Data (for AI Consulting)</button>
     <div class="last-updated" id="lastUpdated">Not checked yet</div>
 
     <div id="content">
@@ -1334,6 +1335,142 @@ function backToCampaignDates(){
   campaignNav.level = 'campaign';
   campaignNav.runIndex = null;
   renderCampaignsHub();
+}
+
+// ══════════════════════════════════════════
+// EXPORT — one structured file, built for handing to an AI consultant
+// ══════════════════════════════════════════
+
+function sessionTotalDuration(s){
+  return s.steps.reduce((sum, step) => sum + (step.duration || 0), 0);
+}
+
+function avgDuration(sessions){
+  if (sessions.length === 0) return 0;
+  const total = sessions.reduce((sum, s) => sum + sessionTotalDuration(s), 0);
+  return Math.round(total / sessions.length);
+}
+
+function topPagesFrom(sessions, n){
+  const counts = {};
+  sessions.forEach(s => s.steps.forEach(step => {
+    if (!step.isPage) return;
+    counts[step.label] = (counts[step.label] || 0) + 1;
+  }));
+  return Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, n)
+    .map(([page, visits]) => ({page, visits}));
+}
+
+function summarizeSessions(sessions){
+  return {
+    visitors: sessions.length,
+    total_page_views: sessions.reduce((n,s) => n + s.pageCount, 0),
+    avg_time_on_site_seconds: avgDuration(sessions),
+    top_pages: topPagesFrom(sessions, 5)
+  };
+}
+
+async function exportAllData(){
+  const btn = document.getElementById('exportBtn');
+  if (allEntries.length === 0){
+    alert('Tap "Track Now" first to load data, then export.');
+    return;
+  }
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Building export...';
+
+  try {
+    const export_data = {
+      generated_at: new Date().toISOString(),
+      business: 'Cio Bela Multi-Service Salon (ciobelasalons.com)',
+      note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business. Session-level: each visitor is one row/session, grouped by how they arrived. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
+      channels: {}
+    };
+
+    ['qr','instagram','tiktok','facebook'].forEach(key => {
+      const cfg = TABS[key];
+      const sessions = buildSessions(allEntries.filter(cfg.filter));
+      export_data.channels[key] = summarizeSessions(sessions);
+    });
+
+    ['artists','influencers'].forEach(key => {
+      const cfg = TABS[key];
+      const sessions = buildSessions(allEntries.filter(cfg.filter));
+      const groups = {};
+      sessions.forEach(s => {
+        const k = s.content || 'Unlabeled';
+        (groups[k] = groups[k] || []).push(s);
+      });
+      const byPerson = {};
+      Object.entries(groups).forEach(([name, grp]) => { byPerson[name] = summarizeSessions(grp); });
+      export_data.channels[key] = { overall: summarizeSessions(sessions), by_person: byPerson };
+    });
+
+    const classified = classifySessions();
+    const confirmedIds = new Set(), likelyIds = new Set();
+    Object.entries(classified).forEach(([sid,c]) => {
+      if (c.type === 'search_confirmed') confirmedIds.add(sid);
+      if (c.type === 'search_likely') likelyIds.add(sid);
+    });
+    const allSessionsBuilt = buildSessions(allEntries.filter(e => e.session_id));
+    export_data.channels.search_engines = {
+      confirmed: summarizeSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
+      likely_unconfirmed: summarizeSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
+    };
+
+    export_data.channels.direct_brand = summarizeSessions(buildSessions(getDirectSessionEntries()));
+
+    const refResult = getReferralSessionEntries();
+    const refSessions = buildSessions(refResult.entries);
+    const refGroups = {};
+    refSessions.forEach(s => {
+      const domain = refResult.domains[s.id] || 'Unknown site';
+      (refGroups[domain] = refGroups[domain] || []).push(s);
+    });
+    const byDomain = {};
+    Object.entries(refGroups).forEach(([domain, grp]) => { byDomain[domain] = summarizeSessions(grp); });
+    export_data.channels.referral_sites = { by_domain: byDomain };
+
+    export_data.campaigns = {};
+    TABS.campaigns.campaignsList.forEach(camp => {
+      const sessions = buildSessions(allEntries.filter(camp.filter));
+      const runs = clusterSessionsByDate(sessions).map(run => ({
+        date_range: run.label,
+        ...summarizeSessions(run.sessions)
+      }));
+      export_data.campaigns[camp.key] = { label: camp.label, runs };
+    });
+
+    if (scData && scData.rows){
+      export_data.search_console = {
+        note: 'Official Google Search Console data — separate source, day-level only, not session-based.',
+        range_days: scDays,
+        device_filter: scDevice || 'all',
+        total_clicks: scData.rows.reduce((n,r) => n + r.clicks, 0),
+        total_impressions: scData.rows.reduce((n,r) => n + r.impressions, 0),
+        top_queries: [...scData.rows].sort((a,b) => b.clicks - a.clicks).slice(0, 20).map(r => ({
+          query: r.keys[0], landing_page: r.keys[1] || '', clicks: r.clicks,
+          impressions: r.impressions, ctr: r.ctr, avg_position: r.position
+        }))
+      };
+    }
+
+    const blob = new Blob([JSON.stringify(export_data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cio-bela-analytics-export-' + new Date().toISOString().split('T')[0] + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e){
+    alert('Export failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 renderAll();
