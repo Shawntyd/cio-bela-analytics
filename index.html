@@ -209,6 +209,63 @@
     opacity:.55;
     margin-bottom:20px;
   }
+  .filter-box{
+    background:var(--bark);
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:18px;
+  }
+  .filter-group{margin-bottom:14px;}
+  .filter-group:last-child{margin-bottom:0;}
+  .filter-label{
+    font-size:.68rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--gold-light);
+    margin-bottom:8px;
+  }
+  .filter-pills{display:flex;flex-wrap:wrap;gap:6px;}
+  .filter-pill{
+    font-family:'Jost',sans-serif;
+    font-size:.75rem;
+    background:var(--charcoal);
+    color:var(--cream);
+    opacity:.6;
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:16px;
+    padding:6px 12px;
+    cursor:pointer;
+  }
+  .filter-pill.active{
+    background:var(--gold);
+    color:var(--charcoal);
+    opacity:1;
+    border-color:var(--gold);
+    font-weight:600;
+  }
+  .filter-dates{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .filter-dates input{
+    background:var(--charcoal);
+    color:var(--cream);
+    border:1px solid rgba(184,147,90,.3);
+    border-radius:8px;
+    padding:7px 10px;
+    font-family:'Jost',sans-serif;
+    font-size:.78rem;
+  }
+  .filter-dates span{color:var(--cream);opacity:.5;font-size:.75rem;}
+  .filter-clear{
+    font-family:'Jost',sans-serif;
+    font-size:.72rem;
+    background:transparent;
+    color:var(--gold-light);
+    border:1px solid rgba(184,147,90,.4);
+    border-radius:16px;
+    padding:5px 12px;
+    cursor:pointer;
+    margin-top:12px;
+  }
   .stat-grid{
     display:grid;
     grid-template-columns:1fr 1fr;
@@ -340,6 +397,7 @@
     <div class="subtabbar" id="subtabbar" style="display:none;"></div>
 
     <div id="linkLib"></div>
+    <div id="artistFilterBar" style="display:none;"></div>
     <div class="subtabbar" id="runtabbar" style="display:none;"></div>
 
     <button class="track-btn" id="trackBtn">Track Now</button>
@@ -679,6 +737,93 @@ function buildSessions(entries){
   return sessions;
 }
 
+const SERVICE_PAGE_MAP = {
+  hair: {label:'Hair', page:'/hair-services'},
+  lashes: {label:'Lashes', page:'/1eyelashextensionsthewoodland-stx'},
+  nails: {label:'Nails', page:'/nail-salon-the-woodlands'},
+  wax: {label:'Wax', page:'/wax-services'}
+};
+
+let artistFilters = { artists: new Set(), services: new Set(), dateFrom: '', dateTo: '' };
+
+function buildArtistFilterBar(){
+  const bar = document.getElementById('artistFilterBar');
+  if (activeTab !== 'artists'){ bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+  const cfg = TABS.artists;
+  const names = [];
+  cfg.links.forEach(l => {
+    const name = l.label.split(' — ')[0];
+    if (!names.includes(name)) names.push(name);
+  });
+
+  bar.style.display = 'block';
+  let html = '<div class="filter-box">';
+
+  html += '<div class="filter-group"><div class="filter-label">Artist</div><div class="filter-pills">';
+  names.forEach(name => {
+    const active = artistFilters.artists.has(name);
+    html += '<button class="filter-pill' + (active?' active':'') + '" onclick="toggleArtistFilter(\'artists\',\'' + name + '\')">' + escapeHtml(name) + '</button>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="filter-group"><div class="filter-label">Service</div><div class="filter-pills">';
+  Object.entries(SERVICE_PAGE_MAP).forEach(([key, s]) => {
+    const active = artistFilters.services.has(key);
+    html += '<button class="filter-pill' + (active?' active':'') + '" onclick="toggleArtistFilter(\'services\',\'' + key + '\')">' + s.label + '</button>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="filter-group"><div class="filter-label">Date Range</div><div class="filter-dates">';
+  html += '<input type="date" id="filterDateFrom" value="' + artistFilters.dateFrom + '" onchange="setDateFilter(\'dateFrom\',this.value)">';
+  html += '<span>to</span>';
+  html += '<input type="date" id="filterDateTo" value="' + artistFilters.dateTo + '" onchange="setDateFilter(\'dateTo\',this.value)">';
+  html += '</div></div>';
+
+  const hasAny = artistFilters.artists.size || artistFilters.services.size || artistFilters.dateFrom || artistFilters.dateTo;
+  if (hasAny) html += '<button class="filter-clear" onclick="clearArtistFilters()">Clear All Filters</button>';
+
+  html += '</div>';
+  bar.innerHTML = html;
+}
+
+function toggleArtistFilter(kind, value){
+  const set = artistFilters[kind];
+  if (set.has(value)) set.delete(value); else set.add(value);
+  buildArtistFilterBar();
+  renderData();
+}
+
+function setDateFilter(which, value){
+  artistFilters[which] = value;
+  buildArtistFilterBar();
+  renderData();
+}
+
+function clearArtistFilters(){
+  artistFilters = { artists: new Set(), services: new Set(), dateFrom: '', dateTo: '' };
+  buildArtistFilterBar();
+  renderData();
+}
+
+function sessionMatchesArtistFilters(s){
+  if (artistFilters.artists.size && !artistFilters.artists.has(capitalize(s.content))) return false;
+  if (artistFilters.services.size){
+    const wantedPages = [...artistFilters.services].map(k => SERVICE_PAGE_MAP[k].page);
+    const touches = s.steps.some(step => wantedPages.includes(step.label));
+    if (!touches) return false;
+  }
+  if (artistFilters.dateFrom){
+    const from = new Date(artistFilters.dateFrom + 'T00:00:00');
+    if (new Date(s.firstSeen) < from) return false;
+  }
+  if (artistFilters.dateTo){
+    const to = new Date(artistFilters.dateTo + 'T23:59:59');
+    if (new Date(s.firstSeen) > to) return false;
+  }
+  return true;
+}
+
 function renderData(){
   const content = document.getElementById('content');
   const runbar = document.getElementById('runtabbar');
@@ -691,7 +836,10 @@ function renderData(){
     return;
   }
 
-  const sessions = buildSessions(filtered);
+  let sessions = buildSessions(filtered);
+  if (activeTab === 'artists'){
+    sessions = sessions.filter(sessionMatchesArtistFilters);
+  }
 
   if (cfg.dateGrouped){
     const runs = clusterSessionsByDate(sessions);
@@ -720,11 +868,17 @@ function renderData(){
   }
 
   runbar.style.display = 'none'; runbar.innerHTML = '';
-  const views = filtered.filter(e => (e.event || 'view') === 'view');
+  const pageViewCount = sessions.reduce((n, s) => n + s.pageCount, 0);
   let html = '<div class="stat-grid">';
   html += statCard(sessions.length, 'Visitors');
-  html += statCard(views.length, 'Total Page Views');
+  html += statCard(pageViewCount, 'Total Page Views');
   html += '</div>';
+
+  if (sessions.length === 0){
+    html += '<div class="empty">No visits match the current filters.</div>';
+    content.innerHTML = html;
+    return;
+  }
 
   if (cfg.grouped){
     const groups = {};
@@ -798,12 +952,15 @@ function renderAll(){
     document.getElementById('subtabbar').innerHTML = '';
     document.getElementById('runtabbar').style.display = 'none';
     document.getElementById('runtabbar').innerHTML = '';
+    document.getElementById('artistFilterBar').style.display = 'none';
+    document.getElementById('artistFilterBar').innerHTML = '';
     renderCampaignsHub();
     return;
   }
 
   buildSubtabbar();
   buildLinkLib();
+  buildArtistFilterBar();
   if (allEntries.length > 0){
     renderData();
   } else {
