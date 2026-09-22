@@ -860,11 +860,32 @@ function sessionMatchesArtistFilters(s){
   return true;
 }
 
+function getSearchEngineSessionEntries(){
+  // A referrer only reflects the page immediately before it — real for page 1
+  // of a search visit, but wrong (it's just your own prior page) on page 2+.
+  // So: find sessions where NO event carries a utm_source AND at least one
+  // event's referrer matches a search engine, then pull in the WHOLE session
+  // (every page that visitor touched), not just the one page that happened
+  // to still show the Google referrer.
+  const bySession = {};
+  allEntries.forEach(e => {
+    const sid = e.session_id || 'unlabeled';
+    (bySession[sid] = bySession[sid] || []).push(e);
+  });
+  const qualifying = new Set();
+  Object.entries(bySession).forEach(([sid, evts]) => {
+    const hasUtm = evts.some(e => e.utm_source);
+    const hasSearchReferrer = evts.some(e => isSearchEngineReferrer(e.referrer));
+    if (!hasUtm && hasSearchReferrer) qualifying.add(sid);
+  });
+  return allEntries.filter(e => qualifying.has(e.session_id || 'unlabeled'));
+}
+
 function renderData(){
   const content = document.getElementById('content');
   const runbar = document.getElementById('runtabbar');
   const cfg = currentConfig();
-  const filtered = allEntries.filter(cfg.filter);
+  const filtered = activeTab === 'search' ? getSearchEngineSessionEntries() : allEntries.filter(cfg.filter);
 
   if (filtered.length === 0){
     runbar.style.display = 'none'; runbar.innerHTML = '';
