@@ -401,7 +401,7 @@
     <div class="subtabbar" id="runtabbar" style="display:none;"></div>
 
     <button class="track-btn" id="trackBtn">Track Now</button>
-    <button class="filter-clear" id="exportBtn" style="display:block;width:100%;text-align:center;margin-top:8px;padding:10px;" onclick="exportAllData()">📤 Export All Data (for AI Consulting)</button>
+    <button class="filter-clear" id="exportBtn" style="display:block;width:100%;text-align:center;margin-top:8px;padding:10px;" onclick="exportAllData()">Export</button>
     <div class="last-updated" id="lastUpdated">Not checked yet</div>
 
     <div id="content">
@@ -1384,27 +1384,27 @@ async function exportAllData(){
     const export_data = {
       generated_at: new Date().toISOString(),
       business: 'Cio Bela Multi-Service Salon (ciobelasalons.com)',
-      note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business. Session-level: each visitor is one row/session, grouped by how they arrived. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
-      channels: {}
+      note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business, organized exactly like the dashboard tabs it came from. Session-level: each visitor is one entry, grouped under the channel/tab that brought them in. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
+      tabs: {}
     };
 
-    ['qr','instagram','tiktok','facebook'].forEach(key => {
+    [['qr','QR Screens'], ['instagram','Instagram'], ['tiktok','TikTok'], ['facebook','Facebook']].forEach(([key,label]) => {
       const cfg = TABS[key];
       const sessions = buildSessions(allEntries.filter(cfg.filter));
-      export_data.channels[key] = summarizeSessions(sessions);
+      export_data.tabs[label] = summarizeSessions(sessions);
     });
 
-    ['artists','influencers'].forEach(key => {
+    [['artists','Artists'], ['influencers','Influencers']].forEach(([key,label]) => {
       const cfg = TABS[key];
       const sessions = buildSessions(allEntries.filter(cfg.filter));
       const groups = {};
       sessions.forEach(s => {
-        const k = s.content || 'Unlabeled';
+        const k = s.content ? capitalize(s.content) : 'Unlabeled';
         (groups[k] = groups[k] || []).push(s);
       });
-      const byPerson = {};
-      Object.entries(groups).forEach(([name, grp]) => { byPerson[name] = summarizeSessions(grp); });
-      export_data.channels[key] = { overall: summarizeSessions(sessions), by_person: byPerson };
+      const by_person = {};
+      Object.entries(groups).forEach(([name, grp]) => { by_person[name] = summarizeSessions(grp); });
+      export_data.tabs[label] = { overall: summarizeSessions(sessions), by_person };
     });
 
     const classified = classifySessions();
@@ -1414,12 +1414,12 @@ async function exportAllData(){
       if (c.type === 'search_likely') likelyIds.add(sid);
     });
     const allSessionsBuilt = buildSessions(allEntries.filter(e => e.session_id));
-    export_data.channels.search_engines = {
+    export_data.tabs['Search Engines'] = {
       confirmed: summarizeSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
       likely_unconfirmed: summarizeSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
     };
 
-    export_data.channels.direct_brand = summarizeSessions(buildSessions(getDirectSessionEntries()));
+    export_data.tabs['Direct / Brand'] = summarizeSessions(buildSessions(getDirectSessionEntries()));
 
     const refResult = getReferralSessionEntries();
     const refSessions = buildSessions(refResult.entries);
@@ -1428,22 +1428,23 @@ async function exportAllData(){
       const domain = refResult.domains[s.id] || 'Unknown site';
       (refGroups[domain] = refGroups[domain] || []).push(s);
     });
-    const byDomain = {};
-    Object.entries(refGroups).forEach(([domain, grp]) => { byDomain[domain] = summarizeSessions(grp); });
-    export_data.channels.referral_sites = { by_domain: byDomain };
+    const by_domain = {};
+    Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = summarizeSessions(grp); });
+    export_data.tabs['Referral Sites'] = { by_domain };
 
-    export_data.campaigns = {};
+    const campaigns_by_name = {};
     TABS.campaigns.campaignsList.forEach(camp => {
       const sessions = buildSessions(allEntries.filter(camp.filter));
       const runs = clusterSessionsByDate(sessions).map(run => ({
         date_range: run.label,
         ...summarizeSessions(run.sessions)
       }));
-      export_data.campaigns[camp.key] = { label: camp.label, runs };
+      campaigns_by_name[camp.label] = { runs };
     });
+    export_data.tabs['Campaigns'] = campaigns_by_name;
 
     if (scData && scData.rows){
-      export_data.search_console = {
+      export_data.tabs['Search Console'] = {
         note: 'Official Google Search Console data — separate source, day-level only, not session-based.',
         range_days: scDays,
         device_filter: scDevice || 'all',
