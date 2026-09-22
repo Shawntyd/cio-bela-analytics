@@ -504,6 +504,15 @@ const TABS = {
     label: 'Search Console',
     isSearchConsole: true,
     note: 'Official Google data — real search queries, clicks, impressions, and position, straight from Search Console. Complements the Search Engines tab, which shows visitor paths but can miss traffic when the browser strips referrer info (common on mobile).'
+  },
+  direct: {
+    label: 'Direct / Brand',
+    note: 'No link to copy — this is visitors who typed ciobelasalons.com directly or have it saved (bookmark, saved contact, typed from memory). A real signal of brand recognition and repeat visitors, separate from anyone arriving via a link.'
+  },
+  referrals: {
+    label: 'Referral Sites',
+    grouped: true,
+    note: 'No link to copy — this is traffic from other websites linking to you that isn\'t search and isn\'t one of your tracked channels: a blog mention, a directory listing, a local partner\'s site. Grouped by which site sent them.'
   }
 };
 
@@ -865,57 +874,78 @@ function sessionMatchesArtistFilters(s){
   return true;
 }
 
-function getSearchEngineSessionEntries(){
-  // A referrer only reflects the page immediately before it — real for page 1
-  // of a search visit, but wrong (it's just your own prior page) on page 2+.
-  // So: find sessions where NO event carries a utm_source AND at least one
-  // event's referrer matches a search engine, then pull in the WHOLE session
-  // (every page that visitor touched), not just the one page that happened
-  // to still show the Google referrer.
-  const bySession = {};
-  allEntries.forEach(e => {
-    const sid = e.session_id || 'unlabeled';
-    (bySession[sid] = bySession[sid] || []).push(e);
-  });
-  const qualifying = new Set();
-  Object.entries(bySession).forEach(([sid, evts]) => {
-    const hasUtm = evts.some(e => e.utm_source);
-    const hasSearchReferrer = evts.some(e => isSearchEngineReferrer(e.referrer));
-    if (!hasUtm && hasSearchReferrer) qualifying.add(sid);
-  });
-  return allEntries.filter(e => qualifying.has(e.session_id || 'unlabeled'));
+function isOwnDomainReferrer(referrer){
+  if (!referrer) return false;
+  try { return new URL(referrer).hostname.toLowerCase().includes('ciobelasalons.com'); }
+  catch(e){ return false; }
 }
 
-function classifySearchSessions(){
+// Classifies every untagged session (no utm_source anywhere in it) into one
+// bucket, based on how it entered the site — search engine, direct/typed,
+// or a genuine referral from some other website (a blog mention, a
+// directory listing, a local partner's site, etc).
+function classifySessions(){
   const bySession = {};
   allEntries.forEach(e => {
     if (!e.session_id) return;
     (bySession[e.session_id] = bySession[e.session_id] || []).push(e);
   });
-  const labels = {}; // session_id -> 'confirmed' | 'likely'
+  const result = {}; // session_id -> {type, domain?}
   Object.entries(bySession).forEach(([sid, evts]) => {
-    if (evts.some(e => e.utm_source)) return; // tagged traffic belongs to its own channel tab
+    if (evts.some(e => e.utm_source)) return; // tagged — belongs to its own channel tab already
 
     if (evts.some(e => isSearchEngineReferrer(e.referrer))){
-      labels[sid] = 'confirmed';
+      result[sid] = {type: 'search_confirmed'};
       return;
     }
 
     const sorted = [...evts].sort((a,b) => new Date(a.ts) - new Date(b.ts));
     const first = sorted.find(e => (e.event || 'view') === 'view') || sorted[0];
-    if (first && first.page && first.page !== '/' && !first.referrer){
-      // Landed directly on an inner page, no tag, no referrer at all — nobody
-      // types a long service-page URL from memory, so this is almost always
-      // search, a bookmark, or a copied link. Labeled "likely," never "confirmed."
-      labels[sid] = 'likely';
+    if (!first) return;
+    const ref = first.referrer || '';
+
+    if (!ref){
+      // No referrer at all: homepage entry reads as someone who typed the
+      // domain or has it saved — direct/brand traffic. An inner page with
+      // no referrer is the "likely search" case from before.
+      result[sid] = { type: first.page === '/' ? 'direct' : 'search_likely' };
+      return;
     }
+
+    if (isOwnDomainReferrer(ref)){
+      result[sid] = {type: 'direct'}; // safety-net fallback, rare edge case
+      return;
+    }
+
+    let domain = 'Unknown site';
+    try { domain = new URL(ref).hostname.replace(/^www\./, ''); } catch(e){}
+    result[sid] = {type: 'referral', domain};
   });
-  return labels;
+  return result;
 }
 
 function getSearchEngineSessionEntries(){
-  const labels = classifySearchSessions();
+  const classified = classifySessions();
+  const labels = {};
+  Object.entries(classified).forEach(([sid, c]) => {
+    if (c.type === 'search_confirmed') labels[sid] = 'confirmed';
+    if (c.type === 'search_likely') labels[sid] = 'likely';
+  });
   return { entries: allEntries.filter(e => e.session_id && labels[e.session_id]), labels };
+}
+
+function getDirectSessionEntries(){
+  const classified = classifySessions();
+  const ids = new Set(Object.entries(classified).filter(([,c]) => c.type === 'direct').map(([sid]) => sid));
+  return allEntries.filter(e => ids.has(e.session_id));
+}
+
+function getReferralSessionEntries(){
+  const classified = classifySessions();
+  const domains = {};
+  Object.entries(classified).forEach(([sid, c]) => { if (c.type === 'referral') domains[sid] = c.domain; });
+  const entries = allEntries.filter(e => domains.hasOwnProperty(e.session_id));
+  return { entries, domains };
 }
 
 function renderData(){
@@ -923,11 +953,18 @@ function renderData(){
   const runbar = document.getElementById('runtabbar');
   const cfg = currentConfig();
   let searchLabels = null;
+  let referralDomains = null;
   let filtered;
   if (activeTab === 'search'){
     const r = getSearchEngineSessionEntries();
     filtered = r.entries;
     searchLabels = r.labels;
+  } else if (activeTab === 'direct'){
+    filtered = getDirectSessionEntries();
+  } else if (activeTab === 'referrals'){
+    const r = getReferralSessionEntries();
+    filtered = r.entries;
+    referralDomains = r.domains;
   } else {
     filtered = allEntries.filter(cfg.filter);
   }
@@ -995,6 +1032,17 @@ function renderData(){
       html += '<div class="empty-note" style="margin:-6px 0 12px;">No referrer or tag at all, but landed directly on an inner page — almost always search, a bookmark, or a shared link, not someone typing the full URL from memory. Inferred, not confirmed.</div>';
       html += renderVisitorList(likely, activeTab + '-likely');
     }
+  } else if (activeTab === 'referrals' && referralDomains){
+    const groups = {};
+    sessions.forEach(s => {
+      const key = referralDomains[s.id] || 'Unknown site';
+      (groups[key] = groups[key] || []).push(s);
+    });
+    Object.keys(groups).sort().forEach(key => {
+      const groupSessions = groups[key];
+      html += '<div class="section-title">' + escapeHtml(key) + ' — Visitor Paths (' + groupSessions.length + ')</div>';
+      html += renderVisitorList(groupSessions, activeTab + '-' + key);
+    });
   } else if (cfg.grouped){
     const groups = {};
     sessions.forEach(s => {
@@ -1157,6 +1205,24 @@ function renderScResults(){
   html += statCard(totalClicks, 'Total Clicks');
   html += statCard(totalImpressions, 'Impressions');
   html += '</div>';
+
+  if (allEntries.length > 0){
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - scDays);
+    const classified = classifySessions();
+    const seenSessions = new Set();
+    let ourCount = 0;
+    allEntries.forEach(e => {
+      if (!e.session_id || seenSessions.has(e.session_id)) return;
+      const c = classified[e.session_id];
+      if (!c || (c.type !== 'search_confirmed' && c.type !== 'search_likely')) return;
+      if (new Date(e.ts) < cutoff) return;
+      seenSessions.add(e.session_id);
+      ourCount++;
+    });
+    html += '<div class="empty-note" style="margin-bottom:16px;">Our own tracker logged <strong>' + ourCount + '</strong> search-attributed visitor' + (ourCount===1?'':'s') + ' (Confirmed + Likely) in this same ' + scDays + '-day window, vs Google\'s <strong>' + totalClicks + '</strong> reported clicks. Day-level only — not a per-visitor match, just a sanity check that the two numbers are in the same ballpark.</div>';
+  }
+
   html += '<div class="section-title">Top Search Queries (' + rows.length + ')</div>';
 
   rows.forEach(r => {
