@@ -459,7 +459,7 @@ const TABS = {
   search: {
     label: 'Search Engines',
     filter: e => (!e.utm_source || e.utm_source === '') && isSearchEngineReferrer(e.referrer),
-    note: 'No link to copy here — this tab reads organic Google/Bing/Yahoo/DuckDuckGo traffic automatically from each visit\'s referrer. Nothing to hand out or tag.'
+    note: 'No link to copy here. Shows two groups: visits confirmed as coming from a search engine (referrer says so directly), and visits landing straight on an inner page with no tag or referrer at all — very likely search too, just not provable, so labeled separately.'
   },
   qr: {
     label: 'QR Screens',
@@ -886,11 +886,51 @@ function getSearchEngineSessionEntries(){
   return allEntries.filter(e => qualifying.has(e.session_id || 'unlabeled'));
 }
 
+function classifySearchSessions(){
+  const bySession = {};
+  allEntries.forEach(e => {
+    if (!e.session_id) return;
+    (bySession[e.session_id] = bySession[e.session_id] || []).push(e);
+  });
+  const labels = {}; // session_id -> 'confirmed' | 'likely'
+  Object.entries(bySession).forEach(([sid, evts]) => {
+    if (evts.some(e => e.utm_source)) return; // tagged traffic belongs to its own channel tab
+
+    if (evts.some(e => isSearchEngineReferrer(e.referrer))){
+      labels[sid] = 'confirmed';
+      return;
+    }
+
+    const sorted = [...evts].sort((a,b) => new Date(a.ts) - new Date(b.ts));
+    const first = sorted.find(e => (e.event || 'view') === 'view') || sorted[0];
+    if (first && first.page && first.page !== '/' && !first.referrer){
+      // Landed directly on an inner page, no tag, no referrer at all — nobody
+      // types a long service-page URL from memory, so this is almost always
+      // search, a bookmark, or a copied link. Labeled "likely," never "confirmed."
+      labels[sid] = 'likely';
+    }
+  });
+  return labels;
+}
+
+function getSearchEngineSessionEntries(){
+  const labels = classifySearchSessions();
+  return { entries: allEntries.filter(e => e.session_id && labels[e.session_id]), labels };
+}
+
 function renderData(){
   const content = document.getElementById('content');
   const runbar = document.getElementById('runtabbar');
   const cfg = currentConfig();
-  const filtered = activeTab === 'search' ? getSearchEngineSessionEntries() : allEntries.filter(cfg.filter);
+  let searchLabels = null;
+  let filtered;
+  if (activeTab === 'search'){
+    const r = getSearchEngineSessionEntries();
+    filtered = r.entries;
+    searchLabels = r.labels;
+  } else {
+    filtered = allEntries.filter(cfg.filter);
+  }
 
   if (filtered.length === 0){
     runbar.style.display = 'none'; runbar.innerHTML = '';
@@ -942,7 +982,20 @@ function renderData(){
     return;
   }
 
-  if (cfg.grouped){
+  if (activeTab === 'search' && searchLabels){
+    const confirmed = sessions.filter(s => searchLabels[s.id] === 'confirmed');
+    const likely = sessions.filter(s => searchLabels[s.id] === 'likely');
+    if (confirmed.length){
+      html += '<div class="section-title">✅ Confirmed From Search — Visitor Paths (' + confirmed.length + ')</div>';
+      html += '<div class="empty-note" style="margin:-6px 0 12px;">Browser referrer directly showed Google, Bing, or another search engine.</div>';
+      html += renderVisitorList(confirmed, activeTab + '-confirmed');
+    }
+    if (likely.length){
+      html += '<div class="section-title">🟡 Likely From Search — Visitor Paths (' + likely.length + ')</div>';
+      html += '<div class="empty-note" style="margin:-6px 0 12px;">No referrer or tag at all, but landed directly on an inner page — almost always search, a bookmark, or a shared link, not someone typing the full URL from memory. Inferred, not confirmed.</div>';
+      html += renderVisitorList(likely, activeTab + '-likely');
+    }
+  } else if (cfg.grouped){
     const groups = {};
     sessions.forEach(s => {
       const key = s.content || 'Unlabeled';
