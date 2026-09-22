@@ -745,6 +745,7 @@ const SERVICE_PAGE_MAP = {
 };
 
 let artistFilters = { artists: new Set(), services: new Set(), dateFrom: '', dateTo: '' };
+let artistFilterBarOpen = false;
 
 function buildArtistFilterBar(){
   const bar = document.getElementById('artistFilterBar');
@@ -757,8 +758,16 @@ function buildArtistFilterBar(){
     if (!names.includes(name)) names.push(name);
   });
 
+  const activeCount = artistFilters.artists.size + artistFilters.services.size
+    + (artistFilters.dateFrom ? 1 : 0) + (artistFilters.dateTo ? 1 : 0);
+
   bar.style.display = 'block';
-  let html = '<div class="filter-box">';
+  let html = '<div class="link-group-card">';
+  html += '<div class="link-group-header" onclick="toggleArtistFilterBar()">';
+  html += '<div><div class="link-group-name">🔍 Filters' + (activeCount ? ' (' + activeCount + ' active)' : '') + '</div></div>';
+  html += '<div class="link-group-chevron' + (artistFilterBarOpen ? ' open' : '') + '">&#9662;</div>';
+  html += '</div>';
+  html += '<div class="link-group-body' + (artistFilterBarOpen ? ' open' : '') + '" style="padding:' + (artistFilterBarOpen ? '4px 14px 14px' : '0 14px') + ';">';
 
   html += '<div class="filter-group"><div class="filter-label">Artist</div><div class="filter-pills">';
   names.forEach(name => {
@@ -780,11 +789,15 @@ function buildArtistFilterBar(){
   html += '<input type="date" id="filterDateTo" value="' + artistFilters.dateTo + '" onchange="setDateFilter(\'dateTo\',this.value)">';
   html += '</div></div>';
 
-  const hasAny = artistFilters.artists.size || artistFilters.services.size || artistFilters.dateFrom || artistFilters.dateTo;
-  if (hasAny) html += '<button class="filter-clear" onclick="clearArtistFilters()">Clear All Filters</button>';
+  if (activeCount) html += '<button class="filter-clear" onclick="clearArtistFilters()">Clear All Filters</button>';
 
-  html += '</div>';
+  html += '</div></div>';
   bar.innerHTML = html;
+}
+
+function toggleArtistFilterBar(){
+  artistFilterBarOpen = !artistFilterBarOpen;
+  buildArtistFilterBar();
 }
 
 function toggleArtistFilter(kind, value){
