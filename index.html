@@ -532,9 +532,13 @@ function toggleLinkGroup(gid){
   chev.classList.toggle('open');
 }
 
+const CIO_BELA_INSTAGRAM = 'https://www.instagram.com/ciobelasalon';
+
 function copyLink(id, url, withBrandPrefix){
   const btn = document.getElementById(id);
-  const text = withBrandPrefix ? ('Cio Bela! ' + url) : url;
+  const text = withBrandPrefix
+    ? `Cio Bela!\n\nWebsite -\n${url}\n\nInstagram -\n${CIO_BELA_INSTAGRAM}`
+    : url;
   const done = () => {
     btn.textContent = 'Copied';
     btn.classList.add('copied');
