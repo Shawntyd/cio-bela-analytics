@@ -1667,7 +1667,15 @@ async function exportPdfReport(){
       y += 10;
     });
 
-    doc.save('cio-bela-analytics-report-' + new Date().toISOString().split('T')[0] + '.pdf');
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = 'cio-bela-analytics-report-' + new Date().toISOString().split('T')[0] + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
   } catch(e){
     alert('PDF export failed: ' + e.message);
   } finally {
