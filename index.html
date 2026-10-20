@@ -415,6 +415,10 @@
 
 <script>
 const LOG_URL = 'https://raw.githubusercontent.com/Shawntyd/cio-bela-20-off-promo/main/visits.log';
+// The live log gets reset by the Worker if it grows past ~1MB (a GitHub
+// Contents-API limit), so older history is kept here instead, outside the
+// file the Worker writes to. Both are fetched and merged below.
+const ARCHIVE_URL = 'https://raw.githubusercontent.com/Shawntyd/cio-bela-20-off-promo/main/visits-archive.log';
 const TEST_CAMPAIGNS = ['connection_test', 'retry_check'];
 const TEST_PAGES = ['test', 'retry-test'];
 
@@ -669,13 +673,29 @@ async function loadData(){
   content.innerHTML = '<div class="loading">Fetching latest visits...</div>';
 
   try {
-    const resp = await fetch(LOG_URL + '?t=' + Date.now(), {cache:'no-store'});
-    if (!resp.ok) throw new Error('Could not reach the log (status ' + resp.status + ')');
-    const text = await resp.text();
-    const lines = text.split('\n').filter(l => l.trim().length > 0);
-    let entries = lines.map(l => {
-      try { return JSON.parse(l); } catch(e) { return null; }
-    }).filter(e => e !== null);
+    const [liveResp, archiveResp] = await Promise.all([
+      fetch(LOG_URL + '?t=' + Date.now(), {cache:'no-store'}),
+      fetch(ARCHIVE_URL + '?t=' + Date.now(), {cache:'no-store'})
+    ]);
+    if (!liveResp.ok) throw new Error('Could not reach the log (status ' + liveResp.status + ')');
+    // The archive is a safety net, not the primary source — if it's ever
+    // missing or unreachable, fall back to the live log alone rather than
+    // failing the whole load.
+    const liveText = await liveResp.text();
+    const archiveText = archiveResp.ok ? await archiveResp.text() : '';
+
+    const seen = new Set();
+    const parseLines = text => text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .filter(l => { if (seen.has(l)) return false; seen.add(l); return true; })
+      .map(l => { try { return JSON.parse(l); } catch(e) { return null; } })
+      .filter(e => e !== null);
+
+    // Archive first so a duplicate line (an entry logged before a Worker
+    // reset, already saved to the archive, then re-appears in the live log)
+    // keeps its archive copy and sorts correctly either way.
+    let entries = parseLines(archiveText).concat(parseLines(liveText));
 
     entries = entries.filter(e =>
       !TEST_CAMPAIGNS.includes(e.utm_campaign) && !TEST_PAGES.includes(e.page)
