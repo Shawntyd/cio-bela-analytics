@@ -472,8 +472,12 @@ const TABS = {
   },
   qr: {
     label: 'QR Screens',
-    filter: e => e.utm_source === 'qr_screens',
-    links: [{label:'In-Salon Screens', url: HOME + '?utm_source=qr_screens&utm_medium=offline&utm_campaign=in_salon'}]
+    filter: e => e.utm_source === 'qr_screens' || e.utm_source === 'station_qr',
+    qrSplit: true,
+    links: [
+      {label:'Station QR (Follow & Save page)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/follow/?src=station'},
+      {label:'In-Salon Screens', url: HOME + '?utm_source=qr_screens&utm_medium=offline&utm_campaign=in_salon'}
+    ]
   },
   instagram: {
     label: 'Instagram',
@@ -505,12 +509,6 @@ const TABS = {
         label: 'Rose Campaign',
         filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
         links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
-      }
-      ,{
-        key: 'station',
-        label: 'Station QR (Follow & Save)',
-        filter: e => e.utm_campaign === 'follow_and_save',
-        links: [{label:'Station QR destination', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/follow/?src=station'}]
       }
       ,{
         key: 'booth',
@@ -730,7 +728,7 @@ function stepLabel(e){
   if (e.page === '/follow-and-save' && (e.event || 'view') === 'view') return 'Scanned Station QR (opened page)';
   if (e.page === '/booth' && (e.event || 'view') === 'view') return 'Scanned Booth QR (opened page)';
   const FS = {
-    review_copy_tap: 'Tapped "Copy & Post on Google"',
+    review_copy_tap: '⭐ Went to leave a Google review',
     review_skip: 'Skipped the review',
     ig_follow_tap: 'Tapped Follow on Instagram',
     tt_follow_tap: 'Tapped Follow on TikTok',
@@ -808,6 +806,7 @@ function buildSessions(entries){
         label: stepLabel(e),
         duration: duration,
         isPage: (e.event || 'view') === 'view',
+        event: e.event || 'view',
         tag: e.utm_content || ''
       });
     });
@@ -1096,6 +1095,20 @@ function renderData(){
       html += '<div class="section-title">' + escapeHtml(key) + ' — Visitor Paths (' + groupSessions.length + ')</div>';
       html += renderVisitorList(groupSessions, activeTab + '-' + key);
     });
+  } else if (cfg.qrSplit){
+    const isStation = s => filtered.some(e => e.session_id === s.id && e.utm_source === 'station_qr');
+    const station = sessions.filter(isStation);
+    const screens = sessions.filter(s => !isStation(s));
+    const did = (s, ev) => s.steps.some(st => st.event === ev);
+    const reviewTaps = station.filter(s => did(s, 'review_copy_tap')).length;
+    const follows = station.filter(s => did(s, 'ig_follow_tap') || did(s, 'tt_follow_tap')).length;
+    html = '<div class="stat-grid">' + statCard(sessions.length, 'Visitors') + statCard(pageViewCount, 'Total Page Views')
+         + statCard(reviewTaps, 'Review Taps') + statCard(follows, 'Follow Taps') + '</div>';
+    html += '<div class="empty-note" style="margin:4px 0 14px;">Review taps count people who tapped "Copy &amp; Post on Google" on the station page. Google does not tell us whether they finished posting, so compare with new reviews on your Google profile.</div>';
+    html += '<div class="section-title">Station QR (Follow &amp; Save) — Visitor Paths (' + station.length + ')</div>';
+    html += station.length ? renderVisitorList(station, activeTab + '-station') : '<div class="empty-note" style="margin:-6px 0 12px;">No station scans yet.</div>';
+    html += '<div class="section-title">In-Salon Screens — Visitor Paths (' + screens.length + ')</div>';
+    html += screens.length ? renderVisitorList(screens, activeTab + '-screens') : '<div class="empty-note" style="margin:-6px 0 12px;">No screen scans yet.</div>';
   } else if (cfg.grouped){
     const groups = {};
     sessions.forEach(s => {
