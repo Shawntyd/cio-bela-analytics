@@ -506,6 +506,18 @@ const TABS = {
         filter: e => e.utm_campaign === 'mall_rose_promo' || e.utm_source === 'rose_qr',
         links: [{label:'Rose Promo Page (QR destination)', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/'}]
       }
+      ,{
+        key: 'station',
+        label: 'Station QR (Follow & Save)',
+        filter: e => e.utm_campaign === 'follow_and_save',
+        links: [{label:'Station QR destination', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/follow/?src=station'}]
+      }
+      ,{
+        key: 'booth',
+        label: 'Booth (School Visits)',
+        filter: e => e.utm_campaign === 'booth',
+        links: [{label:'Booth QR destination', url: 'https://shawntyd.github.io/cio-bela-20-off-promo/booth/?src=booth'}]
+      }
       // Future campaigns get added here as new entries in this list.
     ]
   },
@@ -715,6 +727,22 @@ async function loadData(){
 function stepLabel(e){
   if (e.event === 'book_now_click') return 'Tapped "For Rose Holders Only"';
   if (e.event === 'instagram_click') return 'Tapped Instagram icon';
+  if (e.page === '/follow-and-save' && (e.event || 'view') === 'view') return 'Scanned Station QR (opened page)';
+  if (e.page === '/booth' && (e.event || 'view') === 'view') return 'Scanned Booth QR (opened page)';
+  const FS = {
+    review_copy_tap: 'Tapped "Copy & Post on Google"',
+    review_skip: 'Skipped the review',
+    ig_follow_tap: 'Tapped Follow on Instagram',
+    tt_follow_tap: 'Tapped Follow on TikTok',
+    tab_instagram: 'Switched to Instagram tab',
+    tab_tiktok: 'Switched to TikTok tab',
+    reached_end: 'Reached the final screen',
+    opened_blueprint: 'Opened "See what we\'re building"',
+    opened_earnings: 'Opened "See what you could earn"',
+    website_tap: 'Tapped "Visit ciobelasalons.com"',
+    book_tap: 'Tapped "Book My Next Visit"'
+  };
+  if (FS[e.event]) return FS[e.event];
   if (e.page === '/') return 'Homepage';
   return e.page || '(unknown page)';
 }
