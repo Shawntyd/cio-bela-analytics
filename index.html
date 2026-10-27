@@ -1435,18 +1435,39 @@ function summarizeSessions(sessions){
   };
 }
 
+// The full ordered page-by-page path per visitor, with seconds spent on
+// each page — this is what actually shows funnel drop-off (JSON export
+// only; the PDF stays a human summary, this would be unreadable there).
+function sessionDetails(sessions){
+  return sessions.map(s => ({
+    visitor: s.number,
+    started_at: s.firstSeen,
+    total_duration_seconds: sessionTotalDuration(s),
+    path: s.steps.map(step => {
+      const entry = { page: step.label, seconds_on_page: step.duration };
+      if (step.tag) entry.tag = step.tag;
+      return entry;
+    })
+  }));
+}
+
+// summary stats + the full per-visitor path list, in one object
+function withSessions(sessions){
+  return { ...summarizeSessions(sessions), sessions: sessionDetails(sessions) };
+}
+
 function buildExportData(){
   const export_data = {
     generated_at: new Date().toISOString(),
     business: 'Cio Bela Multi-Service Salon (ciobelasalons.com)',
-    note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business, organized exactly like the dashboard tabs it came from. Session-level: each visitor is one entry, grouped under the channel/tab that brought them in. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Use this to advise on growth, channel investment, and content/page strategy.',
+    note_for_ai_consultants: 'This is real first-party visitor-tracking data from a small salon business, organized exactly like the dashboard tabs it came from. Session-level: each visitor is one entry, grouped under the channel/tab that brought them in. "avg_time_on_site_seconds" is total time across all pages in that session, averaged across visitors in that group. Each group also includes a "sessions" array: one entry per visitor with their full ordered page-by-page path and seconds spent on each page ("path"), which is what actually shows funnel drop-off — use that, not just top_pages, to see where visitors stall or leave. Use this to advise on growth, channel investment, and content/page strategy.',
     tabs: {}
   };
 
   [['qr','QR Screens'], ['instagram','Instagram'], ['tiktok','TikTok'], ['facebook','Facebook']].forEach(([key,label]) => {
     const cfg = TABS[key];
     const sessions = buildSessions(allEntries.filter(cfg.filter));
-    export_data.tabs[label] = summarizeSessions(sessions);
+    export_data.tabs[label] = withSessions(sessions);
   });
 
   [['artists','Artists'], ['influencers','Influencers']].forEach(([key,label]) => {
@@ -1458,8 +1479,8 @@ function buildExportData(){
       (groups[k] = groups[k] || []).push(s);
     });
     const by_person = {};
-    Object.entries(groups).forEach(([name, grp]) => { by_person[name] = summarizeSessions(grp); });
-    export_data.tabs[label] = { overall: summarizeSessions(sessions), by_person };
+    Object.entries(groups).forEach(([name, grp]) => { by_person[name] = withSessions(grp); });
+    export_data.tabs[label] = { overall: withSessions(sessions), by_person };
   });
 
   const classified = classifySessions();
@@ -1470,11 +1491,11 @@ function buildExportData(){
   });
   const allSessionsBuilt = buildSessions(allEntries.filter(e => e.session_id));
   export_data.tabs['Search Engines'] = {
-    confirmed: summarizeSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
-    likely_unconfirmed: summarizeSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
+    confirmed: withSessions(allSessionsBuilt.filter(s => confirmedIds.has(s.id))),
+    likely_unconfirmed: withSessions(allSessionsBuilt.filter(s => likelyIds.has(s.id)))
   };
 
-  export_data.tabs['Direct / Brand'] = summarizeSessions(buildSessions(getDirectSessionEntries()));
+  export_data.tabs['Direct / Brand'] = withSessions(buildSessions(getDirectSessionEntries()));
 
   const refResult = getReferralSessionEntries();
   const refSessions = buildSessions(refResult.entries);
@@ -1484,7 +1505,7 @@ function buildExportData(){
     (refGroups[domain] = refGroups[domain] || []).push(s);
   });
   const by_domain = {};
-  Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = summarizeSessions(grp); });
+  Object.entries(refGroups).forEach(([domain, grp]) => { by_domain[domain] = withSessions(grp); });
   export_data.tabs['Referral Sites'] = { by_domain };
 
   const campaigns_by_name = {};
@@ -1492,7 +1513,7 @@ function buildExportData(){
     const sessions = buildSessions(allEntries.filter(camp.filter));
     const runs = clusterSessionsByDate(sessions).map(run => ({
       date_range: run.label,
-      ...summarizeSessions(run.sessions)
+      ...withSessions(run.sessions)
     }));
     campaigns_by_name[camp.label] = { runs };
   });
