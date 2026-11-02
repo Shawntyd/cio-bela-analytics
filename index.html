@@ -429,7 +429,7 @@ const WAX = 'https://www.ciobelasalons.com/wax-services';
 const HOME = 'https://www.ciobelasalons.com';
 const UPGRADE_PAGE = HOME + '/russian-manicure-upgrade';
 // Test visits made while building the upgrade page (Nov 2, 2026), left out of the Russian Upgrade tab
-const UPGRADE_TEST_SESSIONS = new Set(['48281bf1-e95b-4d8e-82a9-f27a96f95f80','6ba25010-0099-4162-8f45-d41c838c9c51','c9e9614b-e8db-4e96-938f-a4e1fbc96129','d9574854-e9f4-4337-8184-3d35d83e566e']);
+const UPGRADE_TEST_SESSIONS = new Set(['48281bf1-e95b-4d8e-82a9-f27a96f95f80','6ba25010-0099-4162-8f45-d41c838c9c51','c9e9614b-e8db-4e96-938f-a4e1fbc96129','d9574854-e9f4-4337-8184-3d35d83e566e','34211fe0-fafa-40e0-8911-f1528f481e1b']);
 function isUpgradeEntry(e){
   if (UPGRADE_TEST_SESSIONS.has(e.session_id)) return false;
   if ((e.referrer || '').indexOf('/robots.txt') !== -1) return false;
