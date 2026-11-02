@@ -427,6 +427,15 @@ const LASHES = 'https://www.ciobelasalons.com/1eyelashextensionsthewoodland-stx'
 const NAILS = 'https://www.ciobelasalons.com/nail-salon-the-woodlands';
 const WAX = 'https://www.ciobelasalons.com/wax-services';
 const HOME = 'https://www.ciobelasalons.com';
+const UPGRADE_PAGE = HOME + '/russian-manicure-upgrade';
+// Test visits made while building the upgrade page (Nov 2, 2026), left out of the Russian Upgrade tab
+const UPGRADE_TEST_SESSIONS = new Set(['48281bf1-e95b-4d8e-82a9-f27a96f95f80','6ba25010-0099-4162-8f45-d41c838c9c51','c9e9614b-e8db-4e96-938f-a4e1fbc96129','d9574854-e9f4-4337-8184-3d35d83e566e']);
+function isUpgradeEntry(e){
+  if (UPGRADE_TEST_SESSIONS.has(e.session_id)) return false;
+  if ((e.referrer || '').indexOf('/robots.txt') !== -1) return false;
+  const p = e.page || '';
+  return p === '/russian-manicure-upgrade' || p.indexOf('russian-upgrade/') === 0 || e.utm_campaign === 'russian_upgrade';
+}
 
 function artistLinks(name, slug){
   return [
@@ -518,6 +527,12 @@ const TABS = {
       }
       // Future campaigns get added here as new entries in this list.
     ]
+  },
+  upgrade: {
+    label: 'Russian Upgrade',
+    filter: e => isUpgradeEntry(e),
+    upgradeFunnel: true,
+    links: [{label: 'Savannah\'s "Time confirmed" text', url: UPGRADE_PAGE + '?utm_source=savannah&utm_medium=text&utm_campaign=russian_upgrade'}]
   },
   searchconsole: {
     label: 'Search Console',
@@ -741,6 +756,9 @@ function stepLabel(e){
     book_tap: 'Tapped "Book My Next Visit"'
   };
   if (FS[e.event]) return FS[e.event];
+  if (e.event === 'upgrade_paid') return '💳 Paid the $40 upgrade';
+  if (e.page === 'russian-upgrade/checkout') return 'Opened the $40 checkout';
+  if (e.page === '/russian-manicure-upgrade') return 'Opened the Russian manicure upgrade page';
   if (e.page === '/') return 'Homepage';
   return e.page || '(unknown page)';
 }
@@ -1109,6 +1127,16 @@ function renderData(){
     html += station.length ? renderVisitorList(station, activeTab + '-station') : '<div class="empty-note" style="margin:-6px 0 12px;">No station scans yet.</div>';
     html += '<div class="section-title">In-Salon Screens — Visitor Paths (' + screens.length + ')</div>';
     html += screens.length ? renderVisitorList(screens, activeTab + '-screens') : '<div class="empty-note" style="margin:-6px 0 12px;">No screen scans yet.</div>';
+  } else if (cfg.upgradeFunnel){
+    const sessHas = (s, test) => filtered.some(e => e.session_id === s.id && test(e));
+    const opened = sessions.filter(s => sessHas(s, e => e.page === 'russian-upgrade/checkout')).length;
+    const paid = sessions.filter(s => sessHas(s, e => e.event === 'upgrade_paid')).length;
+    const fromText = sessions.filter(s => sessHas(s, e => e.utm_source === 'savannah')).length;
+    html = '<div class="stat-grid">' + statCard(sessions.length, 'Visitors') + statCard(opened, 'Opened Checkout')
+         + statCard(paid, 'Paid $40') + statCard(fromText, 'From Savannah\'s Texts') + '</div>';
+    html += '<div class="empty-note" style="margin:4px 0 14px;">Counts everyone who opened the upgrade page, with or without the tracked link. "From Savannah\'s Texts" counts visitors who used the link above. The Upgrade Payments list in your Wix dashboard (CMS) is the official record of every payment.</div>';
+    html += '<div class="section-title">Visitor Paths (' + sessions.length + ')</div>';
+    html += renderVisitorList(sessions, activeTab);
   } else if (cfg.grouped){
     const groups = {};
     sessions.forEach(s => {
@@ -1518,6 +1546,8 @@ function buildExportData(){
     campaigns_by_name[camp.label] = { runs };
   });
   export_data.tabs['Campaigns'] = campaigns_by_name;
+
+  export_data.tabs['Russian Upgrade'] = withSessions(buildSessions(allEntries.filter(TABS.upgrade.filter)));
 
   if (scData && scData.rows){
     export_data.tabs['Search Console'] = {
